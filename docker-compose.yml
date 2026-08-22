@@ -1,0 +1,72 @@
+# Local stack, built from the Dockerfiles in backend/ and frontend/.
+#
+#   docker compose up --build          start everything
+#   docker compose down                stop (keeps the database volume)
+#   docker compose down -v             stop and wipe the local database
+#
+#   frontend  http://localhost:3000
+#   api       http://localhost:3001/health
+#   mailbox   http://localhost:8025     every outgoing email lands here
+#
+# Seed some products into the empty local database:
+#   docker compose run --rm api node scripts/seed-dev.js
+
+services:
+  mongo:
+    image: mongo:7
+    volumes:
+      - mongo-data:/data/db
+    ports:
+      - "27017:27017"
+
+  # Catches outgoing mail so account-activation links can be opened locally
+  # without sending anything to a real address.
+  mail:
+    image: mailhog/mailhog
+    ports:
+      - "8025:8025"
+
+  api:
+    build: ./backend
+    ports:
+      - "3001:3001"
+    volumes:
+      # Mounted rather than baked into the image: it holds real credentials,
+      # and its `KEY = 'value'` spacing is understood by the app's dotenv but
+      # not by compose's own env_file parser.
+      - ./backend/.env:/app/.env:ro
+    environment:
+      # These win over anything in .env, because dotenv does not overwrite
+      # variables that are already set in the environment.
+      MONGODB_ATLAS_URL: mongodb://mongo:27017/nibedito
+      # To work against the real cloud database instead, comment the line above
+      # out and the value from backend/.env will be used. Be deliberate about
+      # it: that is production data.
+      SMTP_HOST: mail
+      SMTP_PORT: "1025"
+      CLIENT_URL: http://localhost:3000
+      SERVER_PORT: "3001"
+      # Deliberately not "production" here. That switches auth cookies to
+      # SameSite=None; Secure, which browsers reject over plain http on
+      # localhost. Strict is correct locally because :3000 and :3001 are the
+      # same site. On a real deployment, where the two are on different hosts,
+      # NODE_ENV must be "production" or logins will not persist.
+      NODE_ENV: development
+    depends_on:
+      - mongo
+      - mail
+
+  web:
+    build:
+      context: ./frontend
+      args:
+        # Build-time, not runtime: Next inlines NEXT_PUBLIC_* into the client
+        # bundle. Changing this requires `docker compose build web`.
+        NEXT_PUBLIC_API_URL: http://localhost:3001/api
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+volumes:
+  mongo-data:
