@@ -117,20 +117,27 @@ const addToWishlist = async (req, res, next) => {
 };
 
 // ─── DELETE /api/wishlist/remove ───────────────────────────────────────────
-// Remove a single item from the wishlist by its item._id
+// Remove a single item from the wishlist by either item._id or product._id
 const removeFromWishlist = async (req, res, next) => {
   try {
     const userId = req.user._id;
-    const { itemId } = req.body;
+    const { itemId, productId } = req.body;
+
+    if (!itemId && !productId) {
+      throw createError(400, "Either itemId or productId is required");
+    }
 
     const wishlist = await Wishlist.findOne({ user: userId });
     if (!wishlist) {
       throw createError(404, "Wishlist not found");
     }
 
-    const itemIndex = wishlist.items.findIndex(
-      (item) => item._id.toString() === itemId
-    );
+    const itemIndex = wishlist.items.findIndex((item) => {
+      if (itemId && item._id.toString() === itemId) return true;
+      if (productId && item.product.toString() === productId) return true;
+      return false;
+    });
+
     if (itemIndex === -1) {
       throw createError(404, "Item not found in wishlist");
     }

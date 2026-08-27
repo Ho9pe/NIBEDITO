@@ -9,13 +9,19 @@ const validateAddToWishlist = [
     .withMessage("Invalid product ID"),
 ];
 
-// Validates body.itemId when removing a single item from wishlist
+// Validates body when removing a single item from wishlist (either itemId or productId)
 const validateRemoveFromWishlist = [
-  check("itemId")
-    .notEmpty()
-    .withMessage("Item ID is required")
-    .isMongoId()
-    .withMessage("Invalid item ID"),
+  check().custom((value, { req }) => {
+    const { itemId, productId } = req.body;
+    if (!itemId && !productId) {
+      throw new Error("Either itemId or productId is required");
+    }
+    const idToValidate = itemId || productId;
+    if (!/^[0-9a-fA-F]{24}$/.test(idToValidate)) {
+      throw new Error("Invalid ID format");
+    }
+    return true;
+  }),
 ];
 
 module.exports = {
