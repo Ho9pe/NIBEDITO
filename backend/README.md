@@ -84,6 +84,12 @@ credentials, tokens or reset links at any level.
 - Product variant management
 - Stock management
 
+### Invoicing
+- PDF invoice generated per order with PDFKit
+- Downloadable by the order owner or any admin
+- Emailed to the customer as an attachment when the order is placed
+- Store details on the invoice header configurable via `STORE_*` variables
+
 ### Cart Management
 - Add items to cart
 - View cart contents
@@ -184,8 +190,43 @@ correctly: it reads `SameSite=None; Secure (cross-site OK)` when it does.
 | GET | `/api/orders` | Get all orders | `query: { status?: string, userId?: ObjectId }` | `{ statusCode: 200, message: string, payload: { orders: Array<Order & { user: {name, email}, items: Array<{product: {name, price}}> }> } }` | Admin |
 | GET | `/api/orders/user-orders` | Get user's orders | - | `{ statusCode: 200, message: string, payload: { orders: Order[] } }` | User |
 | GET | `/api/orders/:id` | Get order by ID | - | `{ statusCode: 200, message: string, payload: { order: Order } }` | User/Admin |
+| GET | `/api/orders/:id/invoice` | Download the order's invoice as a PDF | - | `application/pdf` (see note below) | Order owner/Admin |
 | PUT | `/api/orders/:id` | Update order status | `{ status: string }` | `{ statusCode: 200, message: string, payload: payload: { order: Order & { user: { name }, items: Array<{ product: { name } }> } } }` | Admin |
 | DELETE | `/api/orders/:id` | Delete order | - | `{ statusCode: 200, message: string }` | Admin |
+
+#### Invoices
+
+`GET /api/orders/:id/invoice` is the only route that does not answer with the
+JSON envelope. It streams the PDF itself:
+
+```
+Content-Type: application/pdf
+Content-Disposition: attachment; filename="INV-20250828-A1B2C3D4.pdf"
+Access-Control-Expose-Headers: Content-Disposition
+```
+
+Errors still use the envelope, so a client reading the response as a blob must
+be ready for a JSON body on a non-2xx status.
+
+Three things worth knowing before changing invoice code:
+
+- **Ownership is checked in the controller, not by the route.** `isLoggedIn`
+  only proves someone is signed in, and an invoice carries the customer's name,
+  address, phone and order contents. The handler compares `order.user` against
+  the requester and falls back to an `Admin` lookup, because users and admins
+  share one cookie and one signing key. `GET /api/orders/:id` has no such check
+  and is a separate problem.
+- **The invoice number is derived, never stored.** `INV-<YYYYMMDD>-<last 8 of
+  the order id>`, built in `helper/invoiceHelper.js`. Existing orders are
+  invoiceable with no migration, and the same order always yields the same
+  number. If you ever need a sequential counter, that becomes a schema change.
+- **Amounts print as `BDT`, not `৳`.** PDFKit's built-in fonts are WinAnsi and
+  U+09F3 is not in that character set, so the taka sign renders as mojibake or
+  throws. Showing it properly means embedding a Bengali font in the repository.
+
+The same PDF is emailed to the customer when the order is created. That send is
+deliberately not awaited — see `helper/invoiceEmail.js` — so an unreachable mail
+server cannot fail an order that has already reduced stock.
 
 ### Payment Router (`/api/payment`)
 | Method | Endpoint | Description | Request Body | Response | Access |
@@ -212,7 +253,7 @@ correctly: it reads `SameSite=None; Secure (cross-site OK)` when it does.
 |--------|----------|-------------|--------------|----------|--------|
 | GET | `/api/shipping/rates` | Get all shipping rates | - | `{ statusCode: 200, message: string, payload: { rates: ShippingRate[] } }` | Public |
 | POST | `/api/shipping/rates` | Create shipping rate | `{ region: string, cost: number, description: string }` | `{ statusCode: 201, message: string, payload: { newRate: ShippingRate } }` | Admin |
-| POST | `/api/shipping/rates/initialize` | Initialize default rates | - | `{ statusCode: 201, message: string, payload: { rates: ShippingRate[] } }` | Admin |
+| POST | `/api/shipping/rates/initialize` | Initialize default rates from `src/constants/shippingDefaults.js`. 400s if any rate already exists | - | `{ statusCode: 201, message: string, payload: { rates: ShippingRate[] } }` | Admin |
 | PUT | `/api/shipping/rates/:rateId` | Update shipping rate | `{ cost?: number, description?: string }` | `{ statusCode: 200, message: string, payload: { updatedRate: ShippingRate } }` | Admin |
 | DELETE | `/api/shipping/rates/:rateId` | Delete shipping rate | - | `{ statusCode: 200, message: string, payload: { deletedRate: ShippingRate } }` | Admin |
 
@@ -259,7 +300,11 @@ Also the source for the support widget's FAQ tab.
 ## Implementation References
 - Server Setup: `src/app.js`
 - Shared field rules: `src/constants/validationRules.js`
+- Default shipping regions: `src/constants/shippingDefaults.js`
 - Logger: `src/helper/logger.js`
+- Invoice data assembly: `src/helper/invoiceHelper.js`
+- Invoice PDF rendering: `src/helper/invoicePdf.js`
+- Invoice email: `src/helper/invoiceEmail.js`
 
 - User Routes: `src/routers/userRouter.js`
 - Admin Routes: `src/routers/adminRouter.js`

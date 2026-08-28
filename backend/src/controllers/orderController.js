@@ -10,6 +10,13 @@ const ShippingRate = require("../models/shippingModel");
 const { getOrderItemsWithReviewStatus } = require("../helper/orderHelper");
 const { createPagination } = require("../helper/paginationHelper");
 const logger = require("../helper/logger");
+const {
+  buildInvoiceData,
+  buildInvoiceFilename,
+} = require("../helper/invoiceHelper");
+const { generateInvoicePdf } = require("../helper/invoicePdf");
+const { sendInvoiceEmail } = require("../helper/invoiceEmail");
+const Admin = require("../models/adminModel");
 
 // Create a new order
 const createOrder = async (req, res, next) => {
@@ -292,6 +299,19 @@ const createOrder = async (req, res, next) => {
 
     // Update cart
     await Cart.findByIdAndDelete(cartId);
+
+    // Email the invoice without blocking the response. Rendering the PDF and
+    // handing it to the mail server can take seconds - longer still when SMTP
+    // is unreachable and the send has to time out - and none of that should
+    // sit between a paying customer and their order confirmation. The promise
+    // carries its own catch, so a failure logs rather than surfacing as an
+    // unhandled rejection, and the same invoice stays downloadable either way.
+    sendInvoiceEmail(newOrder._id).catch((error) =>
+      logger.error(
+        `Unexpected failure dispatching invoice email for order ${newOrder._id}:`,
+        error.message
+      )
+    );
 
     return successResponse(res, {
       statusCode: 201,
@@ -832,6 +852,59 @@ const getOrdersByRegion = async (req, res, next) => {
   }
 };
 
+// Download the invoice for an order as a PDF (order owner, or any admin)
+const downloadInvoice = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      throw createError(400, "Invalid order ID format");
+    }
+
+    const order = await Order.findById(id).select("user");
+    if (!order) {
+      throw createError(404, "Order not found");
+    }
+
+    // An invoice carries the customer's name, address, phone and what they
+    // bought, so ownership is checked here rather than left to the route:
+    // isLoggedIn only proves *someone* is signed in, and order ids are
+    // guessable enough that any signed-in account could otherwise read
+    // another customer's details.
+    const requesterId = req.user._id.toString();
+    const isOrderOwner = order.user?.toString() === requesterId;
+
+    if (!isOrderOwner) {
+      // Users and admins share one cookie and one signing key, so an admin
+      // reaching this route arrives as req.user. Confirm against the Admin
+      // collection before allowing someone else's invoice through.
+      const admin = await Admin.findOne({
+        _id: requesterId,
+        email: req.user.email,
+      });
+      if (!admin) {
+        throw createError(403, "You can only download your own invoices");
+      }
+    }
+
+    const invoice = await buildInvoiceData(id);
+    const pdf = await generateInvoicePdf(invoice);
+    const filename = buildInvoiceFilename(invoice.order);
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.setHeader("Content-Length", pdf.length);
+    // The filename is the only thing the browser needs from the response
+    // headers, and CORS hides it by default on a cross-origin request - which
+    // a deployed frontend always is.
+    res.setHeader("Access-Control-Expose-Headers", "Content-Disposition");
+
+    return res.send(pdf);
+  } catch (error) {
+    next(error);
+  }
+};
+
 // Add to exports
 module.exports = {
   createOrder,
@@ -843,4 +916,5 @@ module.exports = {
   updateOrderPaymentStatus,
   getOrderStats,
   getOrdersByRegion,
+  downloadInvoice,
 };

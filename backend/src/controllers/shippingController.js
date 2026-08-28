@@ -1,6 +1,7 @@
 const ShippingRate = require("../models/shippingModel");
 const createError = require("http-errors");
 const { successResponse } = require("./responseController");
+const { DEFAULT_SHIPPING_RATES } = require("../constants/shippingDefaults");
 
 // Get all shipping rates for customers
 const getAllShippingRates = async (req, res, next) => {
@@ -67,25 +68,7 @@ const initializeDefaultRates = async (req, res, next) => {
       );
     }
 
-    const defaultRates = [
-      {
-        region: "Inside Dhaka",
-        cost: 60,
-        description: "Delivery within Dhaka city",
-      },
-      {
-        region: "Inside Chittagong",
-        cost: 80,
-        description: "Delivery within Chittagong city",
-      },
-      {
-        region: "Outside Dhaka & Chittagong",
-        cost: 120,
-        description: "Delivery to all other locations",
-      },
-    ];
-
-    await ShippingRate.insertMany(defaultRates);
+    await ShippingRate.insertMany(DEFAULT_SHIPPING_RATES);
 
     return successResponse(res, {
       statusCode: 201,
