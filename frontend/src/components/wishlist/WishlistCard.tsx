@@ -2,10 +2,8 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { FiHeart, FiShoppingCart, FiTrash2, FiTrendingDown } from "react-icons/fi";
-import { FiStar } from "react-icons/fi";
+import { FiShoppingCart, FiTrash2, FiTrendingDown, FiStar } from "react-icons/fi";
 import { useWishlist } from "@/contexts/WishlistContext";
-import { useCart } from "@/contexts/CartContext";
 import { useToast } from "@/hooks/useToast";
 import type { WishlistItem } from "@/types/wishlist";
 
