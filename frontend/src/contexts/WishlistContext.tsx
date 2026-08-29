@@ -158,7 +158,7 @@ export function WishlistProvider({ children }: WishlistProviderProps) {
     }
   }, []);
 
-  // ─── O(1) heart-icon check — no API call ─────────────────────────────
+  // ─── Heart-icon check — no API call (Array.includes is O(n)) ─────────────
   const isWishlisted = useCallback(
     (productId: string): boolean => wishlistedIds.includes(productId),
     [wishlistedIds]
