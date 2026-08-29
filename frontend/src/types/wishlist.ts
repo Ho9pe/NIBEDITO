@@ -44,9 +44,9 @@ export interface WishlistContextType {
 
 // ─── Service interface ────────────────────────────────────────────────────
 export interface WishlistService {
-  getWishlist(): Promise<ApiResponse<{ wishlist: Wishlist }>>;
+  getWishlist(): Promise<ApiResponse<{ wishlist: Wishlist | null }>>;
   getWishlistIds(): Promise<ApiResponse<{ wishlistedIds: string[] }>>;
   addToWishlist(data: { productId: string }): Promise<ApiResponse<{ wishlist: Wishlist }>>;
   removeFromWishlist(data: { itemId?: string; productId?: string }): Promise<ApiResponse<{ wishlist: Wishlist }>>;
-  clearWishlist(): Promise<ApiResponse<{ wishlist: Wishlist }>>;
+  clearWishlist(): Promise<ApiResponse<{ wishlist: Wishlist | null }>>;
 }
