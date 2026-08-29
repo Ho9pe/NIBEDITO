@@ -33,11 +33,15 @@ export default function WishlistPage() {
   const [sortedItems, setSortedItems] = useState<WishlistItem[]>([]);
   const [clearing, setClearing] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [pageLoading, setPageLoading] = useState<boolean>(true);
 
-  // Fetch full wishlist data when this page mounts
+  // Fetch full wishlist data when this page mounts / when user becomes available
   useEffect(() => {
-    refetchWishlist();
-  }, [refetchWishlist]);
+    if (!user) return;
+
+    setPageLoading(true);
+    refetchWishlist().finally(() => setPageLoading(false));
+  }, [user, refetchWishlist]);
 
   // Sort items whenever wishlist or sort key changes
   const applySort = useCallback(() => {
