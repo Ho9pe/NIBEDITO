@@ -61,6 +61,20 @@ const buildInvoiceData = async (orderId) => {
     throw createError(404, "Order not found");
   }
 
+  const productsWithIds = order.items
+    .map((item) => item.product)
+    .filter((p) => p?._id);
+
+  const variantsByProductId = new Map(
+    (
+      await Product.find({
+        _id: { $in: productsWithIds.map((p) => p._id) },
+      })
+        .select("variants")
+        .lean()
+    ).map((p) => [p._id.toString(), p.variants || []])
+  );
+
   const items = await Promise.all(
     order.items.map(async (item) => {
       // Products are populated above, but a product deleted since the order was
@@ -72,10 +86,8 @@ const buildInvoiceData = async (orderId) => {
 
       let variantLabel = "";
       if (product?._id) {
-        const fullProduct = await Product.findById(product._id).select(
-          "variants"
-        );
-        const variant = fullProduct?.variants?.find(
+        const variants = variantsByProductId.get(product._id.toString()) || [];
+        const variant = variants.find(
           (v) => v._id.toString() === item.variant.toString()
         );
         if (variant) {
