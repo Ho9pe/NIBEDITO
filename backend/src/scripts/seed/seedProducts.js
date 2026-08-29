@@ -82,7 +82,7 @@ const products = [
         name: "Luxury Diamond Watch",
         description: "Limited edition diamond-encrusted watch with 18K gold case. A masterpiece of horological craftsmanship featuring Swiss movement and rare gemstones.",
         price: 999999.99,
-        categoryName: "Fashion & Accessories",
+        categoryName: "Fashion & Clothing",
         thumbnailImage: demoImageLink,
 
         variants: [
@@ -148,7 +148,7 @@ const products = [
         name: "Paper Clips",
         description: "Standard metal paper clips for office use.",
         price: 0.99,
-        categoryName: "Office Supplies",
+        categoryName: "Books & Stationery",
         thumbnailImage: demoImageLink,
 
         variants: [
@@ -182,7 +182,7 @@ const products = [
         name: "Classic Notebook",
         description: "Simple and elegant notebook for everyday use. Made with high-quality paper.",
         price: 9.99,
-        categoryName: "Office Supplies",
+        categoryName: "Books & Stationery",
         thumbnailImage: demoImageLink,
         variants: []
 
@@ -191,7 +191,7 @@ const products = [
         name: "Digital Marketing eBook",
         description: "Comprehensive guide to modern digital marketing strategies and techniques.",
         price: 24.99,
-        categoryName: "Books & Media",
+        categoryName: "Books & Stationery",
         thumbnailImage: demoImageLink,
         variants: []
 
@@ -200,7 +200,7 @@ const products = [
         name: "Basic White T-Shirt",
         description: "Essential cotton t-shirt for everyday wear.",
         price: 15.99,
-        categoryName: "Fashion & Accessories",
+        categoryName: "Fashion & Clothing",
         thumbnailImage: demoImageLink,
         variants: []
 
@@ -227,11 +227,16 @@ const seedProducts = async () => {
 
         // Process each product
         const processedProducts = [];
+        const skipped = [];
         for (const product of products) {
             // Find category
             const category = await Category.findOne({ name: product.categoryName });
             if (!category) {
-                console.log(`Category ${product.categoryName} not found, skipping product ${product.name}`);
+                // Collected and reported as a group at the end. Six of thirteen
+                // products used to vanish here behind individual log lines that
+                // scrolled past unread - the two seed files had drifted apart on
+                // category names, and the only symptom was a short catalogue.
+                skipped.push(`${product.name} (no category "${product.categoryName}")`);
                 continue;
             }
 
@@ -253,7 +258,16 @@ const seedProducts = async () => {
 
         // Insert products
         const result = await Product.insertMany(processedProducts);
-        console.log(`${result.length} products seeded successfully`);
+        console.log(`${result.length} of ${products.length} products seeded successfully`);
+
+        if (skipped.length) {
+            console.warn(
+                `\nWARNING: ${skipped.length} product(s) were dropped because their\n` +
+                `category does not exist. Run seedCategories.js first, and make sure\n` +
+                `every categoryName in this file matches a name in that one:\n` +
+                skipped.map((s) => `  - ${s}`).join('\n') + '\n'
+            );
+        }
 
         // Update category product counts
         for (const category of await Category.find()) {
@@ -271,4 +285,10 @@ const seedProducts = async () => {
     }
 };
 
-seedProducts(); 
+// Same reasoning as seedCategories.js: scripts/seed-dev.js imports `products`
+// from here, and a require must not connect and exit the process.
+if (require.main === module) {
+    seedProducts();
+}
+
+module.exports = { products, seedProducts }; 

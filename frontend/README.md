@@ -56,6 +56,13 @@ development, and `next.config.ts` additionally strips bare `console.log` from
 production builds. Message strings still ship in the bundle, so keep secrets out
 of them at every level.
 
+**Binary responses need `responseType: 'blob'`.** The invoice endpoint is the
+only one that does not return the JSON envelope. `orderService.downloadInvoice`
+reads it as a blob and `utils/download.ts` saves it; that helper exists because
+an object URL pins its blob in memory until it is explicitly revoked. Note that
+on an error status the blob holds JSON, not a PDF, so the axios interceptor
+cannot read a message out of it and falls back to its per-status wording.
+
 **Errors** render through `components/common/Error.tsx` (imported as
 `ErrorMessage` — importing it as `Error` shadows the global and breaks
 `instanceof Error`). The axios interceptor deliberately raises no toast: forms
@@ -69,10 +76,10 @@ swallow every click. Add `pointer-events-none` to any purely decorative layer.
 
 Built and working: catalogue with search, filtering, sorting and pagination ·
 categories and subcategories · product detail with image zoom and variants ·
-cart · checkout with shipping regions and coupons · order history · reviews with
-images · profile and multiple addresses · email verification and password reset
-· full admin portal for products, categories, orders, users, coupons, shipping
-and FAQs.
+cart · checkout with shipping regions and coupons · order history with
+downloadable PDF invoices · reviews with images · profile and multiple addresses
+· email verification and password reset · full admin portal for products,
+categories, orders, users, coupons, shipping and FAQs.
 
 Not finished — see the pre-production checklist in the root README for the full
 list with context:

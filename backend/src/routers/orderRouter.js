@@ -10,6 +10,7 @@ const {
   updateOrderPaymentStatus,
   getOrderStats,
   getOrdersByRegion,
+  downloadInvoice,
 } = require("../controllers/orderController");
 
 const { isLoggedIn, isAdmin } = require("../middlewares/authMiddleware");
@@ -24,6 +25,10 @@ orderRouter.post("/", isLoggedIn, createOrder);
 
 // Get all orders (admin only)
 orderRouter.get("/", isLoggedIn, isAdmin, getAllOrders);
+
+// Download an order's invoice as a PDF (order owner or admin).
+// Responds with application/pdf, not the usual JSON envelope.
+orderRouter.get("/:id/invoice", isLoggedIn, downloadInvoice);
 
 // Get a specific order by ID (user must be logged in)
 orderRouter.get("/:id", isLoggedIn, getOrderById);
