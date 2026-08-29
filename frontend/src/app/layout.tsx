@@ -2,6 +2,7 @@
 import { AuthProvider } from "@/contexts/AuthContext";
 import { AdminAuthProvider } from "@/contexts/AdminAuthContext";
 import { CartProvider } from "@/contexts/CartContext";
+import { WishlistProvider } from "@/contexts/WishlistContext";
 import Providers from "./providers";
 import "./globals.css";
 
@@ -23,14 +24,16 @@ export default function RootLayout({ children }) {
           <Providers>
             <AuthProvider>
               <CartProvider>
-                <AdminAuthProvider>
-                  <AdminRouteHandler>
-                    <UserRouteHandler>
-                      {children}
-                      <WhatsAppBotWrapper />
-                    </UserRouteHandler>
-                  </AdminRouteHandler>
-                </AdminAuthProvider>
+                <WishlistProvider>
+                  <AdminAuthProvider>
+                    <AdminRouteHandler>
+                      <UserRouteHandler>
+                        {children}
+                        <WhatsAppBotWrapper />
+                      </UserRouteHandler>
+                    </AdminRouteHandler>
+                  </AdminAuthProvider>
+                </WishlistProvider>
               </CartProvider>
             </AuthProvider>
           </Providers>

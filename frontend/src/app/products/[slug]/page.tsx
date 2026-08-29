@@ -3,9 +3,10 @@
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import Image from "next/image";
-import { FiMinus, FiPlus, FiShoppingCart, FiStar } from "react-icons/fi";
+import { FiMinus, FiPlus, FiShoppingCart, FiStar, FiHeart } from "react-icons/fi";
 import { productService } from "@/services/productService";
 import { useCart } from "@/contexts/CartContext";
+import { useWishlist } from "@/contexts/WishlistContext";
 import { useAuth } from "@/contexts/AuthContext";
 import LoadingSpinner from "@/components/common/LoadingSpinner";
 import ImageMagnifier from "@/components/products/ImageMagnifier";
@@ -18,6 +19,7 @@ import type { Product, ProductVariant } from "@/types";
 export default function ProductDetailsPage() {
   const { slug } = useParams() as { slug: string };
   const { addToCart, cart } = useCart();
+  const { isWishlisted, addToWishlist, removeByProductId } = useWishlist();
   const { user } = useAuth();
   const toast = useToast();
   const [product, setProduct] = useState<Product | null>(null);
@@ -27,8 +29,11 @@ export default function ProductDetailsPage() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [quantity, setQuantity] = useState<number>(1);
   const [loading, setLoading] = useState<boolean>(true);
+  const [wishlistLoading, setWishlistLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [showLoginPopup, setShowLoginPopup] = useState(false);
+
+  const wishlisted = product?._id ? isWishlisted(product._id) : false;
 
   useEffect(() => {
     const fetchProduct = async (): Promise<void> => {
@@ -108,6 +113,43 @@ export default function ProductDetailsPage() {
     }
   };
 
+  const handleWishlistToggle = async (e?: React.MouseEvent): Promise<void> => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
+    if (!user) {
+      setShowLoginPopup(true);
+      return;
+    }
+
+    if (!product?._id) return;
+
+    setWishlistLoading(true);
+    try {
+      if (wishlisted) {
+        const success = await removeByProductId(product._id);
+        if (success) {
+          toast.success("Removed from wishlist");
+        } else {
+          toast.error("Failed to remove from wishlist");
+        }
+      } else {
+        const success = await addToWishlist(product._id);
+        if (success) {
+          toast.success("Added to wishlist!");
+        } else {
+          toast.error("Failed to add to wishlist");
+        }
+      }
+    } catch {
+      toast.error("Something went wrong");
+    } finally {
+      setWishlistLoading(false);
+    }
+  };
+
   if (loading) return <LoadingSpinner />;
   if (error)
     return (
@@ -130,7 +172,7 @@ export default function ProductDetailsPage() {
             {/* Product Gallery */}
             <div className="space-y-4">
               {/* Main Image */}
-              <div className="relative aspect-square w-full bg-background border border-border rounded-xl overflow-hidden">
+              <div className="relative aspect-square w-full bg-background border border-border rounded-xl overflow-hidden group">
                 <ImageMagnifier
                   src={selectedImage || product.thumbnailImage!}
                   alt={product.name}
@@ -138,6 +180,23 @@ export default function ProductDetailsPage() {
                   height={600}
                   className="w-full h-full object-cover"
                 />
+
+                {/* Floating Wishlist Button on Image */}
+                <button
+                  type="button"
+                  onClick={handleWishlistToggle}
+                  disabled={wishlistLoading}
+                  title={wishlisted ? "In your wishlist" : "Add to wishlist"}
+                  className={`absolute top-4 right-4 z-10 w-11 h-11 rounded-full flex items-center justify-center shadow-md transition-all duration-200 active:scale-95 disabled:opacity-60 ${
+                    wishlisted
+                      ? "bg-rose-500 text-white shadow-rose-500/40"
+                      : "bg-white/90 dark:bg-slate-800/90 text-slate-600 dark:text-slate-300 hover:text-rose-500 hover:bg-white dark:hover:bg-slate-800"
+                  }`}
+                >
+                  <FiHeart
+                    className={`w-5 h-5 ${wishlisted ? "fill-current" : ""}`}
+                  />
+                </button>
               </div>
 
               {/* Image Thumbnails */}
@@ -305,6 +364,28 @@ export default function ProductDetailsPage() {
                   )
                     ? "Update Cart"
                     : "Add to Cart"}
+                </button>
+
+                {/* Wishlist Button */}
+                <button
+                  type="button"
+                  onClick={handleWishlistToggle}
+                  disabled={wishlistLoading}
+                  title={wishlisted ? "Remove from wishlist" : "Add to wishlist"}
+                  className={`px-4 py-3 rounded-lg border font-medium text-sm sm:text-base flex items-center justify-center gap-2 transition-all duration-200 active:scale-95 disabled:opacity-60 shadow-sm ${
+                    wishlisted
+                      ? "bg-rose-50 dark:bg-rose-950/30 border-rose-300 dark:border-rose-800 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-950/50"
+                      : "bg-surface border-border text-foreground hover:border-rose-400 hover:text-rose-500 hover:bg-rose-50/50 dark:hover:bg-rose-950/20"
+                  }`}
+                >
+                  <FiHeart
+                    className={`w-5 h-5 ${
+                      wishlisted ? "fill-current text-rose-500" : ""
+                    }`}
+                  />
+                  <span className="hidden sm:inline">
+                    {wishlisted ? "Saved" : "Wishlist"}
+                  </span>
                 </button>
               </div>
 

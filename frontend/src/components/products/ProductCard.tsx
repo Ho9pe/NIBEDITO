@@ -2,11 +2,11 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { FiShoppingCart, FiStar } from "react-icons/fi";
+import { FiShoppingCart, FiStar, FiHeart } from "react-icons/fi";
 import { useEffect, useRef, useState } from "react";
 import { useCart } from "@/contexts/CartContext";
+import { useWishlist } from "@/contexts/WishlistContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/useToast";
 import MarkdownRenderer from "@/components/common/MarkdownRenderer";
 import LoginPopup from "@/components/common/LoginPopup";
@@ -18,7 +18,7 @@ interface ProductCardProps {
   viewMode?: "grid" | "list";
 }
 
-// Helper component for rendering star ratings
+// ─── Star rating sub-component ────────────────────────────────────────────
 const StarRating = ({
   rating,
   reviewCount,
@@ -32,14 +32,9 @@ const StarRating = ({
 
   return (
     <div className="flex items-center gap-1 text-sm">
-      {/* Render full stars */}
       {Array.from({ length: fullStars }, (_, i) => (
-        <FiStar
-          key={`full-${i}`}
-          className="w-4 h-4 fill-current text-yellow-400"
-        />
+        <FiStar key={`full-${i}`} className="w-4 h-4 fill-current text-yellow-400" />
       ))}
-      {/* Render half star if applicable */}
       {hasHalfStar && (
         <div className="relative">
           <FiStar className="w-4 h-4 text-gray-300 dark:text-gray-600" />
@@ -49,14 +44,9 @@ const StarRating = ({
           />
         </div>
       )}
-      {/* Render empty stars */}
       {Array.from({ length: emptyStars }, (_, i) => (
-        <FiStar
-          key={`empty-${i}`}
-          className="w-4 h-4 text-gray-300 dark:text-gray-600"
-        />
+        <FiStar key={`empty-${i}`} className="w-4 h-4 text-gray-300 dark:text-gray-600" />
       ))}
-      {/* Rating text and review count */}
       <span className="ml-1 text-text-secondary text-xs sm:text-sm">
         {rating.toFixed(1)} ({reviewCount}{" "}
         {reviewCount === 1 ? "review" : "reviews"})
@@ -65,135 +55,178 @@ const StarRating = ({
   );
 };
 
+// ─── ProductCard ──────────────────────────────────────────────────────────
 export default function ProductCard({
   product,
   viewMode = "grid",
 }: ProductCardProps) {
   const { addToCart, cart } = useCart();
+  const { isWishlisted, addToWishlist, removeByProductId } = useWishlist();
   const { user } = useAuth();
-  const router = useRouter();
   const toast = useToast();
   const [showLoginPopup, setShowLoginPopup] = useState(false);
+  const [wishlistLoading, setWishlistLoading] = useState(false);
 
   const { _id, slug, name, description, price, thumbnailImage, variants } =
     product;
+
+  const wishlisted = isWishlisted(_id);
 
   const isMobile = useRef<boolean>(
     typeof window !== "undefined" && window.innerWidth <= 768
   );
 
   useEffect(() => {
-    const description = document.querySelector(
-      `#product-${_id} .product-description`
-    );
-    if (description && description.scrollHeight > description.clientHeight) {
-      description.classList.add("truncated");
+    const el = document.querySelector(`#product-${_id} .product-description`);
+    if (el && el.scrollHeight > el.clientHeight) {
+      el.classList.add("truncated");
     }
   }, [_id]);
 
+  // ─── Cart handler ───────────────────────────────────────────────────
   const handleAddToCart = async (e: React.MouseEvent): Promise<void> => {
-    e.preventDefault(); // Prevent the event from bubbling up to the Link component
+    e.preventDefault();
+    e.stopPropagation();
 
-    // Check if user is logged in
     if (!user) {
       setShowLoginPopup(true);
       return;
     }
 
+    if (!variants || variants.length === 0) {
+      toast.error("No variants available for this product");
+      return;
+    }
+
+    const defaultVariant = variants[0];
+    const existingCartItem = cart?.items?.find(
+      (item) =>
+        item.product._id === _id && item.variant._id === defaultVariant._id
+    );
+
     try {
-      // Check if variants exist
-      if (!variants || variants.length === 0) {
-        toast.error("No variants available for this product");
-        return;
-      }
-
-      const defaultVariant = variants[0];
-
-      // Check if this variant is already in cart
-      const existingCartItem = cart?.items?.find(
-        (item) =>
-          item.product._id === _id && item.variant._id === defaultVariant._id
-      );
-
       if (existingCartItem) {
-        // If item exists, increase quantity by 1
         const success = await addToCart(
           _id,
           existingCartItem.quantity + 1,
           defaultVariant._id
         );
-        if (success) {
-          toast.success("Updated quantity in cart");
-        } else {
-          toast.error("Failed to update cart");
-        }
+        if (success) toast.success("Updated quantity in cart");
+        else toast.error("Failed to update cart");
       } else {
-        // If item doesn't exist, add new item with quantity 1
         const success = await addToCart(_id, 1, defaultVariant._id);
-        if (success) {
-          toast.success("Added to cart successfully!");
-        } else {
-          toast.error("Failed to add to cart");
-        }
+        if (success) toast.success("Added to cart successfully!");
+        else toast.error("Failed to add to cart");
       }
-    } catch (error) {
+    } catch {
       toast.error("Error adding to cart");
-      console.error("Add to cart error:", error);
+    }
+  };
+
+  // ─── Wishlist handler ────────────────────────────────────────────────
+  const handleWishlistToggle = async (e: React.MouseEvent): Promise<void> => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!user) {
+      setShowLoginPopup(true);
+      return;
+    }
+
+    setWishlistLoading(true);
+    try {
+      if (wishlisted) {
+        const success = await removeByProductId(_id);
+        if (success) toast.success("Removed from wishlist");
+        else toast.error("Failed to remove from wishlist");
+      } else {
+        const success = await addToWishlist(_id);
+        if (success) toast.success("Added to wishlist!");
+        else toast.error("Failed to add to wishlist");
+      }
+    } catch {
+      toast.error("Something went wrong");
+    } finally {
+      setWishlistLoading(false);
     }
   };
 
   logger.debug("Rendering ProductCard for:", name);
-  logger.debug(product.ratings, product.reviewCount);
 
-  // Render different layouts based on viewMode
+  // ════════════════════════════════════════════════════════════════════
+  // LIST VIEW — uses the correct CSS classes: product-list-item etc.
+  // Action buttons live in product-list-actions (outside the Link area)
+  // ════════════════════════════════════════════════════════════════════
   if (viewMode === "list") {
     return (
       <>
-        <div id={`product-${_id}`} className="product-card product-card-list">
-          <Link href={`/products/${slug}`} className="product-link-list">
-            <div className="product-image-list">
+        <div id={`product-${_id}`} className="product-list-item">
+          {/* Clickable region: image + info */}
+          <Link
+            href={`/products/${slug}`}
+            className="flex flex-row flex-1 min-w-0 no-underline"
+          >
+            <div className="product-list-image">
               <Image
                 src={thumbnailImage || "/images/placeholder.jpg"}
                 alt={name}
-                width={120}
-                height={120}
-                className="product-img-list"
-                sizes="120px"
+                fill
+                className="object-cover"
+                sizes="(max-width: 480px) 96px, (max-width: 640px) 128px, 192px"
               />
             </div>
-            <div className="product-info-list">
-              <div className="product-details-list">
-                <h3 className="product-name-list">{name}</h3>
-                <div className="product-description-preview-list">
-                  <MarkdownRenderer
-                    markdown={
-                      description.slice(0, 80) +
-                      (description.length > 80 ? "..." : "")
-                    }
-                    disableLinks={true}
-                  />
+            <div className="product-list-content">
+              <div className="product-list-info">
+                <div>
+                  <h3 className="font-semibold text-sm sm:text-base text-slate-900 dark:text-white mb-1 line-clamp-2">
+                    {name}
+                  </h3>
+                  <div className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2">
+                    <MarkdownRenderer
+                      markdown={description.slice(0, 80) + (description.length > 80 ? "..." : "")}
+                      disableLinks={true}
+                    />
+                  </div>
                 </div>
-              </div>
-              <div className="product-meta-list">
-                {/* Updated rating display */}
-                <StarRating
-                  rating={product.ratings || 0}
-                  reviewCount={product.reviewCount || 0}
-                />
-                <p className="product-price-list">৳ {price.toFixed(2)}</p>
-                <button
-                  className="btn btn-primary btn-cart-list"
-                  onClick={handleAddToCart}
-                >
-                  <FiShoppingCart />
-                  <span>Add</span>
-                </button>
+                <div className="mt-auto pt-2">
+                  <StarRating
+                    rating={product.ratings || 0}
+                    reviewCount={product.reviewCount || 0}
+                  />
+                  <p className="font-bold text-rose-600 dark:text-rose-400 mt-1">
+                    ৳{price.toFixed(2)}
+                  </p>
+                </div>
               </div>
             </div>
           </Link>
+
+          {/* ── Action buttons: outside the Link — no navigation on click ── */}
+          <div className="product-list-actions gap-2">
+            <button
+              onClick={handleAddToCart}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-rose-600 hover:bg-rose-700 rounded-lg transition-colors duration-200 active:scale-95 whitespace-nowrap"
+            >
+              <FiShoppingCart className="w-4 h-4 flex-shrink-0" />
+              <span className="hidden sm:inline">Add to Cart</span>
+            </button>
+
+            <button
+              onClick={handleWishlistToggle}
+              disabled={wishlistLoading}
+              title={wishlisted ? "Saved to wishlist — manage in Wishlist page" : "Save to wishlist"}
+              className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg border transition-all duration-200 active:scale-95 disabled:opacity-60 whitespace-nowrap ${
+                wishlisted
+                  ? "bg-rose-500 border-rose-500 text-white"
+                  : "bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:border-rose-400 hover:text-rose-600 dark:hover:text-rose-400"
+              }`}
+            >
+              <FiHeart className={`w-4 h-4 flex-shrink-0 ${wishlisted ? "fill-current" : ""}`} />
+              <span className="hidden sm:inline">{wishlisted ? "Saved" : "Wishlist"}</span>
+            </button>
+          </div>
         </div>
 
-        {/* Login Popup */}
         <LoginPopup
           isOpen={showLoginPopup}
           onClose={() => setShowLoginPopup(false)}
@@ -204,38 +237,48 @@ export default function ProductCard({
     );
   }
 
-  // Original grid view
+  // ════════════════════════════════════════════════════════════════════
+  // GRID VIEW — product-card is position:relative, heart sits on top
+  // Link wraps image + info only (not full card height)
+  // Cart button and heart are both OUTSIDE the Link
+  // ════════════════════════════════════════════════════════════════════
   return (
     <>
       <div id={`product-${_id}`} className="product-card">
-        <Link href={`/products/${slug}`} className="product-link">
-          <div className="product-image">
+        {/* Heart button — absolutely positioned, outside Link, no navigation */}
+        <button
+          onClick={handleWishlistToggle}
+          disabled={wishlistLoading}
+          title={wishlisted ? "Saved to wishlist" : "Save to wishlist"}
+          className={`absolute top-2 right-2 z-20 w-8 h-8 flex items-center justify-center rounded-full shadow transition-all duration-200 active:scale-90 disabled:opacity-60 ${
+            wishlisted
+              ? "bg-rose-500 text-white shadow-rose-400/50"
+              : "bg-white/90 dark:bg-slate-700/90 text-slate-400 hover:text-rose-500 hover:bg-white dark:hover:bg-slate-700"
+          }`}
+        >
+          <FiHeart className={`w-3.5 h-3.5 ${wishlisted ? "fill-current" : ""}`} />
+        </button>
+
+        {/* Clickable region: image + product info */}
+        <Link href={`/products/${slug}`} className="block flex-1 min-h-0">
+          <div className="relative w-full aspect-square overflow-hidden bg-slate-100 dark:bg-slate-800">
             <Image
               src={thumbnailImage || "/images/placeholder.jpg"}
               alt={name}
-              width={300}
-              height={300}
-              className="product-img"
+              fill
+              className="object-cover transition-transform duration-500 hover:scale-105"
               sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
             />
-            <div className="product-overlay">
-              <button
-                className="btn btn-primary btn-cart"
-                onClick={handleAddToCart}
-              >
-                <FiShoppingCart />
-                <span>{isMobile.current ? "Add" : "Add to Cart"}</span>
-              </button>
-            </div>
           </div>
-          <div className="product-info">
-            <h3 className="product-name">{name}</h3>
-            <div className="product-description-preview">
+          <div className="p-3">
+            <h3 className="font-semibold text-sm text-slate-900 dark:text-white line-clamp-2 mb-1">
+              {name}
+            </h3>
+            <div className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 mb-2">
               <MarkdownRenderer markdown={description} disableLinks={true} />
             </div>
-            <div className="product-footer">
-              <p className="product-price">৳ {price.toFixed(2)}</p>
-              {/* Updated rating display */}
+            <div className="flex items-center justify-between mt-auto">
+              <p className="font-bold text-rose-600 dark:text-rose-400">৳{price.toFixed(2)}</p>
               <StarRating
                 rating={product.ratings || 0}
                 reviewCount={product.reviewCount || 0}
@@ -243,9 +286,19 @@ export default function ProductCard({
             </div>
           </div>
         </Link>
+
+        {/* Add to Cart — outside Link, no navigation */}
+        <div className="px-3 pb-3">
+          <button
+            onClick={handleAddToCart}
+            className="w-full flex items-center justify-center gap-2 py-2 text-sm font-medium text-white bg-rose-600 hover:bg-rose-700 rounded-lg transition-colors duration-200 active:scale-95"
+          >
+            <FiShoppingCart className="w-4 h-4" />
+            <span>{isMobile.current ? "Add" : "Add to Cart"}</span>
+          </button>
+        </div>
       </div>
 
-      {/* Login Popup */}
       <LoginPopup
         isOpen={showLoginPopup}
         onClose={() => setShowLoginPopup(false)}

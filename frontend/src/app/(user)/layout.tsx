@@ -20,6 +20,7 @@ const ACCOUNT_PATHS = [
   "/my-reviews",
   "/profile",
   "/security",
+  "/wishlist",
 ];
 
 export default function UserLayout({

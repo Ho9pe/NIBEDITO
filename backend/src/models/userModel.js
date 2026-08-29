@@ -108,11 +108,6 @@ const userSchema = new Schema(
       },
     },
 
-    wishlist: {
-      type: [Schema.Types.ObjectId],
-      ref: "Product",
-      default: [],
-    },
 
     isBanned: {
       type: Boolean,
@@ -150,9 +145,6 @@ userSchema.index({ "verificationStatus.phone": 1 });
 
 // Ban status index (for filtering active/banned users)
 userSchema.index({ isBanned: 1 });
-
-// Wishlist optimization (for product recommendations)
-userSchema.index({ wishlist: 1 });
 
 // Address default lookup optimization
 userSchema.index({ "addresses.isDefault": 1 });

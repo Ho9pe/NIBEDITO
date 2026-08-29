@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import ProductCard from "./ProductCard";
 import LoadingSpinner from "../common/LoadingSpinner";
 import LoginPopup from "../common/LoginPopup";
 import Pagination from "../common/Pagination";
@@ -9,6 +8,7 @@ import { FiShoppingCart, FiStar, FiHeart } from "react-icons/fi";
 import Link from "next/link";
 import Image from "next/image";
 import { useCart } from "@/contexts/CartContext";
+import { useWishlist } from "@/contexts/WishlistContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/useToast";
 import type { Product, PaginationInfo } from "@/types";
@@ -81,10 +81,11 @@ export default function ProductGrid({
   viewMode = "grid",
 }: ProductGridProps) {
   const { addToCart } = useCart();
+  const { isWishlisted, addToWishlist, removeByProductId } = useWishlist();
   const { user } = useAuth();
   const toast = useToast();
   const [addingToCart, setAddingToCart] = useState<Record<string, boolean>>({});
-  const [hoveredProduct, setHoveredProduct] = useState<string | null>(null);
+  const [wishlistLoading, setWishlistLoading] = useState<Record<string, boolean>>({});
   const [showLoginPopup, setShowLoginPopup] = useState(false);
 
   const handleAddToCart = async (
@@ -120,6 +121,43 @@ export default function ProductGrid({
       console.error("Add to cart error:", error);
     } finally {
       setAddingToCart((prev) => ({ ...prev, [productId]: false }));
+    }
+  };
+
+  const handleWishlistToggle = async (
+    product: Product,
+    e: React.MouseEvent
+  ): Promise<void> => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!user) {
+      setShowLoginPopup(true);
+      return;
+    }
+
+    const productId = product._id;
+    setWishlistLoading((prev) => ({ ...prev, [productId]: true }));
+    try {
+      if (isWishlisted(productId)) {
+        const success = await removeByProductId(productId);
+        if (success) {
+          toast.success("Removed from wishlist");
+        } else {
+          toast.error("Failed to remove from wishlist");
+        }
+      } else {
+        const success = await addToWishlist(productId);
+        if (success) {
+          toast.success("Added to wishlist!");
+        } else {
+          toast.error("Failed to add to wishlist");
+        }
+      }
+    } catch (error) {
+      toast.error("Something went wrong");
+    } finally {
+      setWishlistLoading((prev) => ({ ...prev, [productId]: false }));
     }
   };
 
@@ -210,8 +248,6 @@ export default function ProductGrid({
                             ? "flex flex-row"
                             : "flex flex-col h-full"
                         }`}
-            onMouseEnter={() => setHoveredProduct(product._id)}
-            onMouseLeave={() => setHoveredProduct(null)}
           >
             <Link
               href={`/products/${product.slug}`}
@@ -235,21 +271,6 @@ export default function ProductGrid({
                   fill
                   className="object-cover group-hover:scale-110 transition-transform duration-500"
                 />
-
-                {/* Overlay Actions for Grid View */}
-                {viewMode === "grid" && (
-                  <div
-                    className={`absolute inset-0 bg-black/20 flex items-center justify-center gap-2 transition-opacity duration-300 ${
-                      hoveredProduct === product._id
-                        ? "opacity-100"
-                        : "opacity-0"
-                    }`}
-                  >
-                    <button className="btn-icon bg-white/90 hover:bg-white text-gray-800 shadow-md">
-                      <FiHeart size={16} />
-                    </button>
-                  </div>
-                )}
 
                 {/* Stock Status */}
                 {product.variants &&
@@ -305,7 +326,7 @@ export default function ProductGrid({
                   )}
                 </div>
 
-                {/* Bottom Section - Price and Action Button */}
+                {/* Bottom Section - Price and Action Buttons */}
                 <div
                   className={`flex items-center justify-between mt-auto pt-2 ${
                     viewMode === "list" ? "flex-wrap gap-2" : ""
@@ -330,36 +351,62 @@ export default function ProductGrid({
                   </div>
 
                   {viewMode === "grid" && (
-                    <button
-                      onClick={(e) => handleAddToCart(product, e)}
-                      disabled={
-                        addingToCart[product._id] ||
-                        (product.variants &&
-                          product.variants[0]?.quantity === 0)
-                      }
-                      className="btn-icon btn-primary disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg flex-shrink-0"
-                    >
-                      {addingToCart[product._id] ? (
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      ) : (
-                        <FiShoppingCart size={16} />
-                      )}
-                    </button>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {/* Heart Button beside cart */}
+                      <button
+                        onClick={(e) => handleWishlistToggle(product, e)}
+                        disabled={wishlistLoading[product._id]}
+                        title={
+                          isWishlisted(product._id)
+                            ? "In your wishlist"
+                            : "Add to wishlist"
+                        }
+                        className={`btn-icon shadow-md hover:shadow-lg transition-all duration-200 flex-shrink-0 ${
+                          isWishlisted(product._id)
+                            ? "bg-rose-500 text-white"
+                            : "bg-surface-elevated text-text-secondary hover:text-rose-500 border border-border"
+                        }`}
+                      >
+                        <FiHeart
+                          size={16}
+                          className={
+                            isWishlisted(product._id) ? "fill-current" : ""
+                          }
+                        />
+                      </button>
+
+                      {/* Add to Cart button */}
+                      <button
+                        onClick={(e) => handleAddToCart(product, e)}
+                        disabled={
+                          addingToCart[product._id] ||
+                          (product.variants &&
+                            product.variants[0]?.quantity === 0)
+                        }
+                        className="btn-icon btn-primary disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg flex-shrink-0"
+                      >
+                        {addingToCart[product._id] ? (
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <FiShoppingCart size={16} />
+                        )}
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
             </Link>
 
-            {/* List View Add to Cart */}
+            {/* List View Action Buttons */}
             {viewMode === "list" && (
-              <div className="p-4 flex flex-col items-center justify-center flex-shrink-0 min-w-0">
+              <div className="p-4 flex flex-col items-center justify-center gap-2 flex-shrink-0 min-w-0">
                 <button
                   onClick={(e) => handleAddToCart(product, e)}
                   disabled={
                     addingToCart[product._id] ||
                     (product.variants && product.variants[0]?.quantity === 0)
                   }
-                  className="btn btn-primary btn-sm disabled:opacity-50 whitespace-nowrap"
+                  className="btn btn-primary btn-sm w-full disabled:opacity-50 whitespace-nowrap flex items-center justify-center"
                 >
                   {addingToCart[product._id] ? (
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
@@ -370,12 +417,28 @@ export default function ProductGrid({
                   <span className="sm:hidden">Add</span>
                 </button>
 
-                {/* Heart icon for list view */}
-                <button className="mt-2 p-2 rounded-lg hover:bg-surface-elevated transition-colors">
+                {/* Dedicated Wishlist button for list view */}
+                <button
+                  onClick={(e) => handleWishlistToggle(product, e)}
+                  disabled={wishlistLoading[product._id]}
+                  className={`btn btn-sm w-full whitespace-nowrap flex items-center justify-center border transition-all duration-200 ${
+                    isWishlisted(product._id)
+                      ? "bg-rose-500 border-rose-500 text-white"
+                      : "bg-surface-elevated border-border text-foreground hover:border-rose-400 hover:text-rose-500"
+                  }`}
+                >
                   <FiHeart
                     size={16}
-                    className="text-text-secondary hover:text-primary"
+                    className={`mr-2 ${
+                      isWishlisted(product._id) ? "fill-current" : ""
+                    }`}
                   />
+                  <span className="hidden sm:inline">
+                    {isWishlisted(product._id) ? "Saved" : "Wishlist"}
+                  </span>
+                  <span className="sm:hidden">
+                    {isWishlisted(product._id) ? "Saved" : "Save"}
+                  </span>
                 </button>
               </div>
             )}
