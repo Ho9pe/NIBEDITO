@@ -55,7 +55,6 @@ const timeAgo = (dateStr: string): string => {
 // ─── WishlistCard ─────────────────────────────────────────────────────────
 export default function WishlistCard({ item }: WishlistCardProps) {
   const { removeFromWishlist } = useWishlist();
-  const { addToCart, cart } = useCart();
   const toast = useToast();
 
   const { product, priceAtTimeOfWishlisting, addedAt } = item;
