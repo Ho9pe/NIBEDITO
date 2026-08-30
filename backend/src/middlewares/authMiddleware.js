@@ -3,6 +3,7 @@ const createError = require("http-errors");
 
 const { jwtAccessKey } = require("../secret");
 const Admin = require("../models/adminModel");
+const User = require("../models/userModel");
 
 const isLoggedIn = (req, res, next) => {
   try {
@@ -35,6 +36,32 @@ const isOwner = (req, res, next) => {
         "Not authorized, You can only access your own data"
       );
     }
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
+
+const isNotBanned = async (req, res, next) => {
+  try {
+    const requesterId = req.user?._id;
+    if (!requesterId) {
+      throw createError(401, "You are not logged in");
+    }
+
+    // The ban flag on the token is whatever was true when the token was
+    // signed, so a ban only takes effect once that token expires. Fifteen
+    // minutes is a long time to keep serving someone their customers' names,
+    // addresses and phone numbers, so this reads the live record instead.
+    //
+    // Admins have no row in the User collection; a missing user is therefore
+    // not a rejection here, it just means this is not a customer account and
+    // the route's own admin check is what governs.
+    const user = await User.findById(requesterId).select("isBanned").lean();
+    if (user?.isBanned) {
+      throw createError(403, "Your account is banned");
+    }
+
     next();
   } catch (error) {
     next(error);
@@ -165,6 +192,7 @@ const isAdminLoggedOut = async (req, res, next) => {
 module.exports = {
   isLoggedIn,
   isOwner,
+  isNotBanned,
   isLoggedOut,
   isAdmin,
   isSuperAdmin,

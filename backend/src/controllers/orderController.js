@@ -440,16 +440,53 @@ const getAllOrders = async (req, res, next) => {
   }
 };
 
+/**
+ * Throw unless the requester owns `order`, or is a real admin.
+ *
+ * An order carries the customer's name, address, phone, email and everything
+ * they bought, so "is signed in" is not the bar - order ids are guessable
+ * enough that any account could otherwise read another customer's details.
+ *
+ * Users and admins share one cookie and one signing key, so an admin arrives
+ * here as req.user like anyone else; the Admin collection is what settles it,
+ * not anything the token claims. Accepts `order.user` either populated or as a
+ * bare ObjectId, since callers select it both ways.
+ */
+const assertOrderAccess = async (req, order) => {
+  const requesterId = req.user._id.toString();
+  const ownerId = (order.user?._id || order.user)?.toString();
+
+  if (ownerId === requesterId) return;
+
+  const admin = await Admin.findOne({
+    _id: requesterId,
+    email: req.user.email,
+  });
+  if (!admin) {
+    throw createError(403, "You can only access your own orders");
+  }
+};
+
 // Get order by ID
 const getOrderById = async (req, res, next) => {
   try {
-    const order = await Order.findById(req.params.id)
+    const { id } = req.params;
+
+    // findById on a malformed id throws a CastError, which surfaces as a 500.
+    // A bad id in the URL is the caller's mistake, so answer it as one.
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      throw createError(400, "Invalid order ID format");
+    }
+
+    const order = await Order.findById(id)
       .populate("user", "name")
       .populate("coupon"); // Populate the coupon reference
 
     if (!order) {
       throw createError(404, "Order not found");
     }
+
+    await assertOrderAccess(req, order);
 
     const orderDetails = {
       _id: order._id,
@@ -866,26 +903,7 @@ const downloadInvoice = async (req, res, next) => {
       throw createError(404, "Order not found");
     }
 
-    // An invoice carries the customer's name, address, phone and what they
-    // bought, so ownership is checked here rather than left to the route:
-    // isLoggedIn only proves *someone* is signed in, and order ids are
-    // guessable enough that any signed-in account could otherwise read
-    // another customer's details.
-    const requesterId = req.user._id.toString();
-    const isOrderOwner = order.user?.toString() === requesterId;
-
-    if (!isOrderOwner) {
-      // Users and admins share one cookie and one signing key, so an admin
-      // reaching this route arrives as req.user. Confirm against the Admin
-      // collection before allowing someone else's invoice through.
-      const admin = await Admin.findOne({
-        _id: requesterId,
-        email: req.user.email,
-      });
-      if (!admin) {
-        throw createError(403, "You can only download your own invoices");
-      }
-    }
+    await assertOrderAccess(req, order);
 
     const invoice = await buildInvoiceData(id);
     const pdf = await generateInvoicePdf(invoice);
@@ -898,6 +916,15 @@ const downloadInvoice = async (req, res, next) => {
     // headers, and CORS hides it by default on a cross-origin request - which
     // a deployed frontend always is.
     res.setHeader("Access-Control-Expose-Headers", "Content-Disposition");
+    // An invoice is the customer's address, phone and purchase history in one
+    // file. Keep it out of any cache that outlives the request: shared caches
+    // must not hold it at all, and a browser must not leave it on disk for the
+    // next person to use the machine, or re-serve it from history after logout.
+    res.setHeader("Cache-Control", "private, no-store, max-age=0");
+    res.setHeader("Pragma", "no-cache");
+    // The body is attacker-influenced only through product names, but a
+    // browser that sniffs its way to text/html would treat those as markup.
+    res.setHeader("X-Content-Type-Options", "nosniff");
 
     return res.send(pdf);
   } catch (error) {
