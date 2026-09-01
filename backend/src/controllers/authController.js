@@ -268,7 +268,7 @@ const processRegister = async (req, res, next) => {
     }
 
     // Validate address fields
-    if (!address.street || !address.city || !address.state) {
+    if (!address.street || !address.city || !address.district) {
       throw createError(400, "All address fields are required");
     }
 

@@ -26,7 +26,7 @@ const createOrder = async (req, res, next) => {
       cartId,
       street,
       city,
-      state,
+      district,
       addressDetails = "",
       phone,
       email,
@@ -267,7 +267,7 @@ const createOrder = async (req, res, next) => {
       items: formattedItems,
       street,
       city,
-      state,
+      district,
       addressDetails,
       phone,
       email,
@@ -494,7 +494,7 @@ const getOrderById = async (req, res, next) => {
       items: [...order.items],
       street: order.street,
       city: order.city,
-      state: order.state,
+      district: order.district,
       addressDetails: order.addressDetails, // Include additional address details
       phone: order.phone,
       email: order.email,
@@ -682,7 +682,7 @@ const getUserOrders = async (req, res, next) => {
 
     const orders = await Order.find({ user: userId })
       .select(
-        "user items street city state phone email totalPrice isPaid createdAt dateOrdered status shippingRegion shippingCost freeShipping coupon discountAmount discountBreakdown finalPrice payment isGift giftNote"
+        "user items street city district phone email totalPrice isPaid createdAt dateOrdered status shippingRegion shippingCost freeShipping coupon discountAmount discountBreakdown finalPrice payment isGift giftNote"
       ) // Added isGift and giftNote
       .populate("user", "name email") // Include user details
       .populate("items.product", "name price thumbnailImage") // Include product details with thumbnailImage
