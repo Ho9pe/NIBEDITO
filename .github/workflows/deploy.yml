@@ -1,0 +1,89 @@
+# Build both images on GitHub's runners, then tell the droplet to pull them.
+#
+# The build is here rather than on the server on purpose: `next build` peaks
+# well above what a small droplet has, and an OOM-killed build on the box that
+# is also serving customers takes the site down with it. The droplet only pulls
+# and restarts, which costs it almost nothing.
+
+name: Deploy to production
+
+on:
+  push:
+    branches: [main]
+  # Lets you redeploy the current main without an empty commit.
+  workflow_dispatch:
+
+env:
+  # Lowercase is required: ghcr.io rejects image names with capitals, and the
+  # owner here is "Ho9pe", so github.repository_owner cannot be used directly.
+  API_IMAGE: ghcr.io/ho9pe/nibedito-api
+  WEB_IMAGE: ghcr.io/ho9pe/nibedito-web
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push API image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: true
+          # The :sha tag is what makes a rollback possible - see DEPLOY.md.
+          tags: |
+            ${{ env.API_IMAGE }}:latest
+            ${{ env.API_IMAGE }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push web image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: true
+          tags: |
+            ${{ env.WEB_IMAGE }}:latest
+            ${{ env.WEB_IMAGE }}:${{ github.sha }}
+          # NEXT_PUBLIC_* values are inlined into the client bundle at build
+          # time, so they have to be passed here. Setting them on the container
+          # later does nothing. Changing any of them means a rebuild.
+          build-args: |
+            NEXT_PUBLIC_API_URL=https://nibedito.com/api
+            NEXT_PUBLIC_CLOUDINARY_URL=${{ vars.NEXT_PUBLIC_CLOUDINARY_URL }}
+            NEXT_PUBLIC_WHATSAPP_PHONE_NUMBER=${{ vars.NEXT_PUBLIC_WHATSAPP_PHONE_NUMBER }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Pull and restart on the droplet
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DROPLET_HOST }}
+          username: ${{ secrets.DROPLET_USER }}
+          key: ${{ secrets.DROPLET_SSH_KEY }}
+          script: |
+            set -e
+            cd ~/NIBEDITO
+            # Only picks up compose/nginx changes. Application code arrives in
+            # the images, not through this checkout.
+            git pull --ff-only
+            docker compose -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.prod.yml up -d
+            # A 25 GB disk fills up fast otherwise: every deploy leaves the
+            # previous image behind.
+            docker image prune -f
