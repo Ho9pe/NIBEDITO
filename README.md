@@ -333,11 +333,6 @@ site takes real customers.
 
 ## Half-built features
 
-- [ ] **Wishlist.** `User.wishlist` exists and `POST /products/:slug/wishlist`
-      adds to it, but there is no endpoint to list or remove, and no
-      `/wishlist` page. The nav entries are deliberately left in place - in the
-      account sidebar, the profile dropdown, quick actions and the empty cart -
-      and currently 404.
 - [ ] **Phone verification.** `verificationStatus.phone` is stored and shown but
       nothing ever sets it. The UI says "coming soon".
 - [ ] **Support widget is not a chatbot.** Typing a message opens WhatsApp; no

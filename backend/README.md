@@ -99,6 +99,12 @@ credentials, tokens or reset links at any level.
 - Stock validation
 - Price calculations
 
+### Wishlist
+- One wishlist document per user, created on first add
+- Duplicate guard, and a check that the product is still active
+- Price snapshot per item, for a future price-drop badge
+- A separate IDs-only endpoint so product cards need no request of their own
+
 ## API Endpoints
 
 ### Health (`/health`)
@@ -181,6 +187,44 @@ correctly: it reads `SameSite=None; Secure (cross-site OK)` when it does.
 | PUT | `/api/cart/update` | Update cart item | `{ itemId: ObjectId, quantity: number }` | `{ statusCode: 200, message: string, payload: { cart: Cart } }` | User |
 | DELETE | `/api/cart/remove` | Remove item from cart | `{ itemId: ObjectId }` | `{ statusCode: 200, message: string, payload: { cart: Cart } }` | User |
 | DELETE | `/api/cart/clear` | Clear entire cart | - | `{ statusCode: 200, message: string }` | User |
+
+### Wishlist Router (`/api/wishlist`)
+
+One wishlist document per user, created on the first add. Every route requires a
+signed-in user and is scoped to `req.user._id`, so a wishlist is never readable
+by anyone else.
+
+| Method | Endpoint | Description | Request Body | Response | Access |
+|--------|----------|-------------|--------------|----------|--------|
+| GET | `/api/wishlist` | Full wishlist, products populated. For the wishlist page | - | `{ statusCode: 200, message: string, payload: { wishlist: Wishlist \| null } }` | User |
+| GET | `/api/wishlist/ids` | Wishlisted product IDs only | - | `{ statusCode: 200, message: string, payload: { wishlistedIds: string[] } }` | User |
+| POST | `/api/wishlist/add` | Add a product | `{ productId: ObjectId }` | `{ statusCode: 201, message: string, payload: { wishlist: Wishlist } }` | User |
+| DELETE | `/api/wishlist/remove` | Remove one item | `{ itemId: ObjectId }` **or** `{ productId: ObjectId }` | `{ statusCode: 200, message: string, payload: { wishlist: Wishlist } }` | User |
+| DELETE | `/api/wishlist/clear` | Remove every item, keeping the document | - | `{ statusCode: 200, message: string, payload: { wishlist: Wishlist \| null } }` | User |
+
+Each entry in `items[]` is `{ _id, product, priceAtTimeOfWishlisting, addedAt }`.
+The populated product carries only `name slug price thumbnailImage ratings
+reviewCount isActive`.
+
+Three things the table does not show:
+
+- **`/ids` exists so product cards make no requests of their own.** It returns
+  bare ID strings and nothing else. Fetch it once when the session starts, hold
+  it client-side, and every heart icon in a grid resolves from memory. Asking
+  `GET /api/wishlist` for the same job pulls a populated product per item.
+- **Remove accepts either id.** `itemId` is the entry's own `_id`; `productId`
+  is the product it points at. Either identifies the entry, so a heart icon on a
+  product card can un-wishlist directly, without first fetching the wishlist to
+  discover an `itemId`. Sending both is fine — `itemId` is matched first.
+- **An absent wishlist is a 200, not a 404.** A user who has never wishlisted
+  anything gets `payload.wishlist: null`, and `/ids` gives `[]`. `clear` on a
+  user with no wishlist also answers 200 with `wishlist: null`, because it does
+  not upsert. Clients must handle null rather than treating it as an error.
+
+Failure cases: `404` product not found · `400` product inactive · `409` already
+wishlisted · `404` wishlist or item not found on remove · `400` malformed or
+missing id, from `validators/wishlist.js` through the shared `validateRequest`,
+which answers 400 like every other validator here.
 
 ### Order Router (`/api/orders`)
 
@@ -312,6 +356,7 @@ Also the source for the support widget's FAQ tab.
 - Category Routes: `src/routers/categoryRouter.js`
 - Product Routes: `src/routers/productRouter.js`
 - Cart Routes: `src/routers/cartRouter.js`
+- Wishlist Routes: `src/routers/wishlistRouter.js`
 - Order Routes: `src/routers/orderRouter.js`
 - Payment Routes: `src/routers/paymentRouter.js`
 - Coupon Routes: `src/routers/couponRouter.js`
@@ -326,6 +371,7 @@ Also the source for the support widget's FAQ tab.
 - Category Controller: `src/controllers/categoryController.js`
 - Product Controller: `src/controllers/productController.js`
 - Cart Controller: `src/controllers/cartController.js`
+- Wishlist Controller: `src/controllers/wishlistController.js`
 - Order Controller: `src/controllers/orderController.js`
 - Payment Controller: `src/controllers/paymentController.js`
 - Coupon Controller: `src/controllers/couponController.js`
