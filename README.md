@@ -23,14 +23,15 @@ production. Two companions go deeper without repeating any of it:
 Radix UI · TanStack Query · axios · framer-motion
 
 **Backend** — Node.js · Express · MongoDB with Mongoose · JWT in httpOnly
-cookies · bcryptjs · Cloudinary (image storage) · Nodemailer · express-validator ·
-express-rate-limit
+cookies · bcryptjs · Cloudinary (image storage) · Nodemailer · PDFKit (invoices) ·
+express-validator · express-rate-limit
 
 ## Features
 
 **Storefront** — product catalogue with search, filtering and pagination ·
 categories and subcategories · product detail pages with image galleries ·
-cart · checkout with shipping rates and coupons · order history · product
+cart · checkout with shipping rates and coupons · order history · PDF invoices,
+downloadable from the orders page and emailed on checkout · product
 reviews with images · wishlist
 
 **Accounts** — registration with email activation · login · password reset ·
@@ -58,11 +59,26 @@ docker compose up --build
 That starts four containers: the frontend, the API, a MongoDB instance, and a
 mail catcher. First run takes a few minutes while images build.
 
-The local database starts empty, so seed some products:
+Nothing seeds itself — the containers only start the app, so the local database
+comes up empty and with no accounts. One command fixes both:
 
 ```bash
 docker compose run --rm api node scripts/seed-dev.js
 ```
+
+That gives you the full catalogue — 16 products across 10 categories — the three
+shipping regions, a superadmin for `/admin-login`, and one verified customer you
+can shop as. Both accounts take their passwords from `backend/.env`
+(`SUPER_ADMIN_PASSWORD` and `DEFAULT_USER_PASSWORD`) and the script prints which
+address goes with which. Neither password is printed, and neither should be
+pasted anywhere.
+
+**The shipping regions matter.** Without them the region dropdown at checkout is
+empty and every order is rejected with "Invalid shipping region", so an
+otherwise well-stocked store cannot take a single order.
+
+Re-running it is safe: it replaces the catalogue, the shipping rates and those
+two accounts, and leaves every other account alone.
 
 | Service | URL |
 |---|---|
@@ -149,10 +165,11 @@ returns 500 if the activation email cannot be sent.
 | `JWT_ACTIVATION_KEY` | Signs account-activation and password-reset links |
 | `SMTP_EMAIL` / `SMTP_PASSWORD` | Mail account credentials |
 | `SMTP_HOST` / `SMTP_PORT` | Optional. Defaults to `smtp.gmail.com` and `587`. Compose points these at the local mail catcher |
+| `STORE_NAME` / `STORE_ADDRESS` / `STORE_EMAIL` / `STORE_PHONE` | Optional. Printed in the header of invoice PDFs. Default to `Nibedito`, `Dhaka, Bangladesh`, `SMTP_EMAIL` and blank |
 | `CLOUDINARY_CLOUD_NAME` / `CLOUDINARY_API_KEY` / `CLOUDINARY_API_SECRET` | Product and profile image uploads |
 | `DEFAULT_USER_PICTURE` | Fallback avatar URL |
-| `DEFAULT_USER_PASSWORD` | Used by the test-user seed script |
-| `SUPER_ADMIN_EMAIL` / `SUPER_ADMIN_PASSWORD` / `SUPER_ADMIN_PHONE` | Credentials for the admin account created by `createDefaultAdmin.js` |
+| `DEFAULT_USER_PASSWORD` | Password for the seeded customer accounts, used by `seed-dev.js` and `seedTestUsers.js`. Must satisfy the password rule below — 8+ characters with an uppercase letter, a lowercase letter and a number — or those accounts are skipped |
+| `SUPER_ADMIN_EMAIL` / `SUPER_ADMIN_PASSWORD` / `SUPER_ADMIN_PHONE` | Credentials for the admin account created by `seed-dev.js` and `createDefaultAdmin.js`. Phone is 10 digits here, not 11 |
 
 ## `frontend/.env.local`
 
@@ -168,17 +185,39 @@ Both files are gitignored. Never commit real credentials.
 
 # Scripts
 
-Run these inside the API container (`docker compose run --rm api …`) or from
-`backend/` directly.
+**Every path below is relative to `backend/`, not the repository root.** There is
+no `scripts/` or `src/` directory at the top level — only `backend/`, `frontend/`
+and the two markdown files — so `ls scripts` from where you cloned finds nothing.
+These are also not npm scripts: `npm run` only knows `start`, `dev` and `test`,
+and `npm run seed-dev` does not exist.
 
-| Command | Effect |
+Two ways to run them. Through Docker, from the repository root — the container's
+working directory is `/app`, which holds the contents of `backend/`, so the paths
+in the table work unchanged:
+
+```bash
+docker compose run --rm api node scripts/seed-dev.js
+```
+
+Or directly, which means changing into `backend/` first:
+
+```bash
+cd backend && node scripts/seed-dev.js
+```
+
+The Docker form is the one to prefer. It supplies the environment from
+`docker-compose.yml`, which points the database at the local `mongo` service —
+several of these scripts delete documents, and two of them have no guard against
+being aimed at a hosted cluster.
+
+| Command (relative to `backend/`) | Effect |
 |---|---|
 | `node scripts/sync-catalogue.js` | Copies categories, subcategories and products from the cloud database into the local one, so development shows the same catalogue as the live site. Reads the cloud only; refuses to write into a hosted cluster. Accounts, carts and orders are never copied |
 | `node scripts/check-smtp.js [email]` | Checks the mail server is reachable and the credentials work. Pass an address to send a test message |
-| `node scripts/seed-dev.js` | Seeds a category and three products for local development. Refuses to run against a hosted cluster |
-| `node src/scripts/createDefaultAdmin.js` | Creates the admin account from the `SUPER_ADMIN_*` variables. Needed before you can sign in at `/admin-login` |
-| `node src/scripts/seed/seedCategories.js` | Seeds the full category tree |
-| `node src/scripts/seed/seedProducts.js` | Seeds a larger product catalogue |
+| `node scripts/seed-dev.js` | The one to run on a fresh database. Seeds the full catalogue, the three shipping regions, the superadmin from `SUPER_ADMIN_*`, and one verified customer using `DEFAULT_USER_PASSWORD`. Replaces only those two accounts, never the whole collection. Refuses to run against a hosted cluster |
+| `node src/scripts/createDefaultAdmin.js` | Creates the admin account from the `SUPER_ADMIN_*` variables. `seed-dev.js` already does this; reach for it only to reset the admin on its own. **Deletes every admin first, and has no hosted-cluster guard** — run it through `docker compose run` so compose points it at the local database |
+| `node src/scripts/seed/seedCategories.js` | Seeds the nine-category tree. `seed-dev.js` already does this; run it alone to reset categories |
+| `node src/scripts/seed/seedProducts.js` | Seeds the 13-product catalogue. **Requires the categories to exist first** — it links products to categories by name, and warns loudly about any it has to drop |
 | `node src/scripts/seed/seedTestUsers.js` | Creates test user accounts |
 
 The seed scripts delete existing documents in the collections they populate.
@@ -280,9 +319,11 @@ site takes real customers.
 ## Blocking
 
 - [ ] **Email cannot be sent from the current host.** Render's free tier blocks
-      outbound SMTP, so registration and password reset fail. Either move to a
-      paid instance or switch `helper/email.js` to a provider's HTTPS API. See
-      the SMTP note under Gotchas.
+      outbound SMTP, so registration and password reset fail, and invoice emails
+      never leave the server — the invoice is still downloadable from the orders
+      page, which is why that send is not allowed to fail an order. Either move
+      to a paid instance or switch `helper/email.js` to a provider's HTTPS API.
+      See the SMTP note under Gotchas.
 - [ ] **Rotate the database password.** The old one appeared in startup logs
       before those were redacted, so treat it as public.
 - [ ] **No automated tests anywhere.** `npm test` is still the placeholder that
@@ -292,11 +333,6 @@ site takes real customers.
 
 ## Half-built features
 
-- [ ] **Wishlist.** `User.wishlist` exists and `POST /products/:slug/wishlist`
-      adds to it, but there is no endpoint to list or remove, and no
-      `/wishlist` page. The nav entries are deliberately left in place - in the
-      account sidebar, the profile dropdown, quick actions and the empty cart -
-      and currently 404.
 - [ ] **Phone verification.** `verificationStatus.phone` is stored and shown but
       nothing ever sets it. The UI says "coming soon".
 - [ ] **Support widget is not a chatbot.** Typing a message opens WhatsApp; no

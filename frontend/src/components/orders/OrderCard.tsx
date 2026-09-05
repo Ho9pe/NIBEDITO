@@ -10,6 +10,10 @@ import { Button } from "@/components/ui/button";
 import { Order } from "@/types/order";
 import { PendingReviewProduct } from "@/types/review";
 import CreateReviewModal from "@/components/reviews/CreateReviewModal";
+import { orderService } from "@/services/orderService";
+import { saveBlobAsFile } from "@/utils/download";
+import { useToast } from "@/hooks/useToast";
+import logger from "@/utils/logger";
 import {
   FiPackage,
   FiCheckCircle,
@@ -23,11 +27,15 @@ import {
   FiTruck,
   FiStar,
   FiEdit3,
+  FiDownload,
+  FiLoader,
 } from "react-icons/fi";
 
 export const OrderCard = ({ order }: { order: Order }) => {
   const [reviewModalProduct, setReviewModalProduct] =
     useState<PendingReviewProduct | null>(null);
+  const [downloadingInvoice, setDownloadingInvoice] = useState(false);
+  const toast = useToast();
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("en-US", {
@@ -104,6 +112,26 @@ export const OrderCard = ({ order }: { order: Order }) => {
     // or update the local state to reflect the review was submitted
   };
 
+  const handleDownloadInvoice = async () => {
+    // Guard against a double click queuing a second render of the same PDF.
+    if (downloadingInvoice) return;
+
+    setDownloadingInvoice(true);
+    try {
+      const { blob, filename } = await orderService.downloadInvoice(order._id);
+      saveBlobAsFile(blob, filename);
+      toast.success("Invoice downloaded");
+    } catch (error: any) {
+      // The axios interceptor has already turned the status into readable
+      // wording; it raises no toast of its own, so this is the only message
+      // the person sees.
+      logger.error("Invoice download failed:", error);
+      toast.error(error?.message || "Could not download the invoice");
+    } finally {
+      setDownloadingInvoice(false);
+    }
+  };
+
   return (
     <Card className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800 transition-shadow duration-200 hover:shadow-md">
       {/* Order Header */}
@@ -143,6 +171,23 @@ export const OrderCard = ({ order }: { order: Order }) => {
                 Gift
               </Badge>
             )}
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleDownloadInvoice}
+              disabled={downloadingInvoice}
+              aria-label={`Download invoice for order ${order._id.substring(
+                order._id.length - 8
+              )}`}
+              className="gap-1.5 h-8 bg-white dark:bg-slate-900 border-rose-200 dark:border-rose-900/50 text-rose-700 dark:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/30 hover:text-rose-800 dark:hover:text-rose-200"
+            >
+              {downloadingInvoice ? (
+                <FiLoader className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <FiDownload className="w-3.5 h-3.5" />
+              )}
+              {downloadingInvoice ? "Preparing…" : "Invoice"}
+            </Button>
           </div>
         </div>
         <div className="flex items-center justify-between mt-4">

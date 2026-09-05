@@ -162,10 +162,20 @@ export interface GetOrdersByRegionParams {
   endDate?: string;
 }
 
+/**
+ * An invoice PDF as it comes back from the API: the bytes, plus the name the
+ * server wants the file saved under.
+ */
+export interface InvoiceDownload {
+  blob: Blob;
+  filename: string;
+}
+
 export interface OrderService {
   createOrder(orderData: CreateOrderRequest): Promise<{ success: boolean; data?: Order; error?: string }>;
   getUserOrders(): Promise<{ success: boolean; data?: Order[]; error?: string }>;
   getOrderById(orderId: string): Promise<{ success: boolean; data?: Order; error?: string }>;
+  downloadInvoice(orderId: string): Promise<InvoiceDownload>;
   getAllOrders?(params?: GetAllOrdersParams): Promise<ApiResponse<OrdersResponse>>;
   updateOrderStatus?(orderId: string, status: string): Promise<ApiResponse<{ order: Order }>>;
   updateOrderPaymentStatus?(orderId: string, isPaid: boolean): Promise<ApiResponse<{ order: Order }>>;

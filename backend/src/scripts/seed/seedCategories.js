@@ -51,8 +51,18 @@ const categories = [
         description: "Health supplements, medical supplies, and wellness products",
         image: "https://res.cloudinary.com/dzrgyxroo/image/upload/v1/nibedito/categories/health.jpg",
         isActive: false
+    },
+    {
+        name: "Gift Cards",
+        description: "Digital and physical gift cards for any occasion",
+        image: "https://res.cloudinary.com/dzrgyxroo/image/upload/v1/nibedito/categories/giftcards.jpg",
+        isActive: true
     }
 ];
+
+// seedProducts.js links its products to these by name. Every categoryName it
+// uses must appear above or the product is dropped, so treat this list as the
+// authority and change that file to match - not the other way around.
 
 const seedCategories = async () => {
     try {
@@ -83,5 +93,11 @@ const seedCategories = async () => {
     }
 };
 
-// Run the seeding
-seedCategories(); 
+// Only self-run when invoked directly. scripts/seed-dev.js requires this file
+// for the `categories` list, and importing it must not connect to a database
+// and call process.exit() as a side effect.
+if (require.main === module) {
+    seedCategories();
+}
+
+module.exports = { categories, seedCategories }; 

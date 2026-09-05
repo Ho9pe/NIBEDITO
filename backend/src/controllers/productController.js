@@ -6,7 +6,6 @@ const Category = require("../models/categoryModel");
 const Subcategory = require("../models/subcategoryModel");
 const { uploadImage, deleteImage } = require("../helper/cloudinaryHelper");
 const { validateImage } = require("../validators/image");
-const User = require("../models/userModel");
 const { createPagination } = require("../helper/paginationHelper");
 const logger = require("../helper/logger");
 
@@ -473,50 +472,10 @@ const updateProduct = async (req, res, next) => {
   }
 };
 
-const addToWishlist = async (req, res, next) => {
-  try {
-    // Get product by slug
-    const { slug } = req.params;
-
-    // Find product from database
-    const productExist = await Product.findOne({ slug: slug });
-
-    // Check if product exists
-    if (!productExist) {
-      throw createError(404, "Product not found!");
-    }
-    // Add to wishlist logic here
-    const userId = req.user._id;
-    const user = await User.findById(userId);
-
-    if (!user) {
-      throw createError(404, "User not found!");
-    }
-
-    // Check if product is already in wishlist
-    if (user.wishlist.includes(productExist._id)) {
-      throw createError(409, "Product is already in your wishlist!");
-    } else {
-      // Add product to wishlist
-      user.wishlist.push(productExist._id);
-      await user.save();
-    }
-
-    return successResponse(res, {
-      statusCode: 200,
-      message: "Product added to wishlist successfully!",
-      payload: { product: productExist },
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
 module.exports = {
   createProduct,
   getProducts,
   getProduct,
   deleteProduct,
   updateProduct,
-  addToWishlist,
 };

@@ -1,0 +1,31 @@
+# Production stack for the nibedito.com droplet.
+#
+# Nothing is built here, unlike docker-compose.yml. The images are built by
+# GitHub Actions on every push to main and pulled from ghcr.io; the droplet only
+# ever runs them. That split is what keeps a 1-2 GB box viable, because
+# `next build` needs several times more memory than this machine has.
+#
+#   docker compose -f docker-compose.prod.yml pull
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# Nginx runs on the host rather than in here, and is the only thing listening on
+# a public port. See deploy/nginx/nibedito.com.conf.
+
+services:
+  api:
+    image: ghcr.io/ho9pe/nibedito-api:latest
+    env_file: ./backend/.env
+    # The 127.0.0.1 prefix is load-bearing. Without it Docker publishes on every
+    # interface and writes its own iptables rules that are consulted before
+    # ufw's, so the API would be reachable from the internet on :3001 while ufw
+    # still reports the port as blocked. Binding to loopback sidesteps that
+    # entirely: only Nginx, on this same host, can reach it.
+    ports:
+      - "127.0.0.1:3001:3001"
+    restart: unless-stopped
+
+  web:
+    image: ghcr.io/ho9pe/nibedito-web:latest
+    ports:
+      - "127.0.0.1:3000:3000"
+    restart: unless-stopped

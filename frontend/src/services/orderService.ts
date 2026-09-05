@@ -1,15 +1,17 @@
 import axios from '@/utils/axios';
-import { 
-    OrderService, 
-    CreateOrderRequest, 
-    Order, 
+import { filenameFromContentDisposition } from '@/utils/download';
+import {
+    OrderService,
+    CreateOrderRequest,
+    Order,
     GetAllOrdersParams,
     OrdersResponse,
     ApiResponse,
     OrderStats,
     RegionStats,
     GetOrderStatsParams,
-    GetOrdersByRegionParams
+    GetOrdersByRegionParams,
+    InvoiceDownload
 } from '@/types';
 
 export const orderService: OrderService = {
@@ -35,6 +37,24 @@ export const orderService: OrderService = {
             success: true,
             data: data.payload
         };
+    },
+
+    // The one endpoint that does not return the JSON envelope: it answers with
+    // application/pdf, so the response is read as a blob and the caller is left
+    // to decide what to do with it.
+    async downloadInvoice(orderId: string): Promise<InvoiceDownload> {
+        const response = await axios.get<Blob>(`/orders/${orderId}/invoice`, {
+            responseType: 'blob'
+        });
+
+        // The server names the file, but the header only reaches us when CORS
+        // exposes it. Fall back to a name built from the order id rather than
+        // letting the browser save an untitled download.
+        const filename =
+            filenameFromContentDisposition(response.headers['content-disposition']) ||
+            `invoice-${orderId.slice(-8).toUpperCase()}.pdf`;
+
+        return { blob: response.data, filename };
     },
 
     async getAllOrders(params: GetAllOrdersParams = {}): Promise<ApiResponse<OrdersResponse>> {

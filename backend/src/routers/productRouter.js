@@ -8,7 +8,6 @@ const {
   getProduct,
   deleteProduct,
   updateProduct,
-  addToWishlist,
 } = require("../controllers/productController");
 const { validateProduct } = require("../validators/product");
 const { validateRequest } = require("../middlewares/validateRequest");
@@ -40,7 +39,5 @@ productRouter.put(
   validateRequest,
   updateProduct
 ); //update a product by slug
-
-productRouter.post("/:slug/wishlist", isLoggedIn, addToWishlist); //add product to wishlist by slug
 
 module.exports = productRouter;

@@ -1,4 +1,5 @@
 const express = require("express");
+const rateLimit = require("express-rate-limit");
 
 const {
   createOrder,
@@ -10,11 +11,31 @@ const {
   updateOrderPaymentStatus,
   getOrderStats,
   getOrdersByRegion,
+  downloadInvoice,
 } = require("../controllers/orderController");
 
-const { isLoggedIn, isAdmin } = require("../middlewares/authMiddleware");
+const {
+  isLoggedIn,
+  isAdmin,
+  isNotBanned,
+} = require("../middlewares/authMiddleware");
 
 const orderRouter = express.Router();
+
+// Invoice downloads render a PDF per request, which costs far more than the
+// JSON routes the global 300/min limiter was sized for. Keyed by account
+// rather than by IP: the point is to stop one signed-in session from walking
+// order ids or pinning the event loop, and several customers can share an IP.
+// isLoggedIn runs first, so req.user is always populated by the time the key
+// is read.
+const invoiceLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 30,
+  keyGenerator: (req) => req.user._id.toString(),
+  message: "Too many invoice downloads, please try again later",
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 // Get all orders for a specific user (user must be logged in)
 orderRouter.get("/user-orders", isLoggedIn, getUserOrders);
@@ -24,6 +45,16 @@ orderRouter.post("/", isLoggedIn, createOrder);
 
 // Get all orders (admin only)
 orderRouter.get("/", isLoggedIn, isAdmin, getAllOrders);
+
+// Download an order's invoice as a PDF (order owner or admin).
+// Responds with application/pdf, not the usual JSON envelope.
+orderRouter.get(
+  "/:id/invoice",
+  isLoggedIn,
+  isNotBanned,
+  invoiceLimiter,
+  downloadInvoice
+);
 
 // Get a specific order by ID (user must be logged in)
 orderRouter.get("/:id", isLoggedIn, getOrderById);

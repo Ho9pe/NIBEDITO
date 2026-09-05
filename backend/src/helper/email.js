@@ -29,6 +29,11 @@ const emailWithNodeMailer = async (emailData) => {
             subject: emailData.subject,
             html: emailData.html,
         };
+        // Optional, and only set when present: nodemailer treats an explicit
+        // `attachments: undefined` differently from the key being absent.
+        if (emailData.attachments?.length) {
+            mailOptions.attachments = emailData.attachments;
+        }
         const info = await transporter.sendMail(mailOptions);
         logger.debug(`Message sent: ${info.response}`);
     } catch (error) {
