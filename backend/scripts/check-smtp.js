@@ -18,6 +18,7 @@
 const nodemailer = require("nodemailer");
 const {
   smtpEmail,
+  smtpUser,
   smtpPassword,
   smtpHost,
   smtpPort,
@@ -48,7 +49,8 @@ const HINTS = {
   console.log("  host:     ", smtpHost);
   console.log("  port:     ", smtpPort);
   console.log("  secure:   ", smtpPort === 465);
-  console.log("  user:     ", smtpEmail || "(not set)");
+  console.log("  user:     ", smtpUser || "(not set)");
+  console.log("  from:     ", smtpEmail || "(not set)");
   console.log(
     "  password: ",
     smtpPassword ? `set, ${smtpPassword.length} characters` : "(NOT SET)"
@@ -59,7 +61,7 @@ const HINTS = {
     host: smtpHost,
     port: smtpPort,
     secure: smtpPort === 465,
-    auth: { user: smtpEmail, pass: smtpPassword },
+    auth: { user: smtpUser, pass: smtpPassword },
     connectionTimeout: 7000,
     greetingTimeout: 7000,
     socketTimeout: 15000,

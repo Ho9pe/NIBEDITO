@@ -163,9 +163,12 @@ returns 500 if the activation email cannot be sent.
 | `JWT_ACCESS_KEY` | Signs access tokens (15 minute lifetime) |
 | `JWT_REFRESH_KEY` | Signs refresh tokens (7 day lifetime) |
 | `JWT_ACTIVATION_KEY` | Signs account-activation and password-reset links |
-| `SMTP_EMAIL` / `SMTP_PASSWORD` | Mail account credentials |
-| `SMTP_HOST` / `SMTP_PORT` | Optional. Defaults to `smtp.gmail.com` and `587`. Compose points these at the local mail catcher |
-| `STORE_NAME` / `STORE_ADDRESS` / `STORE_EMAIL` / `STORE_PHONE` | Optional. Printed in the header of invoice PDFs. Default to `Nibedito`, `Dhaka, Bangladesh`, `SMTP_EMAIL` and blank |
+| `SMTP_EMAIL` | The From address. Providers that verify domains — Mailgun among them — refuse anything not on a domain you own |
+| `SMTP_USER` | Optional. The relay login when it differs from the From address. Falls back to `SMTP_EMAIL`, which is the usual case on Mailgun |
+| `SMTP_PASSWORD` | Relay password. On Mailgun this is the SMTP user's password, not the account API key |
+| `SMTP_HOST` / `SMTP_PORT` | Optional. Defaults to `smtp.gmail.com` and `587`. Mailgun is `smtp.mailgun.org`. Compose points these at the local mail catcher |
+| `STORE_NAME` | Optional, defaults to `Nibedito`. Display name on outgoing mail, and the header on invoice PDFs |
+| `STORE_ADDRESS` / `STORE_EMAIL` / `STORE_PHONE` | Optional. Printed on invoice PDFs. Default to `Dhaka, Bangladesh`, `SMTP_EMAIL` and blank |
 | `CLOUDINARY_CLOUD_NAME` / `CLOUDINARY_API_KEY` / `CLOUDINARY_API_SECRET` | Product and profile image uploads |
 | `DEFAULT_USER_PICTURE` | Fallback avatar URL |
 | `DEFAULT_USER_PASSWORD` | Password for the seeded customer accounts, used by `seed-dev.js` and `seedTestUsers.js`. Must satisfy the password rule below — 8+ characters with an uppercase letter, a lowercase letter and a number — or those accounts are skipped |

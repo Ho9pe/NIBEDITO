@@ -8,6 +8,13 @@ const jwtActivationKey = process.env.JWT_ACTIVATION_KEY;
 const jwtAccessKey = process.env.JWT_ACCESS_KEY;
 const jwtRefreshKey = process.env.JWT_REFRESH_KEY;
 const smtpEmail = process.env.SMTP_EMAIL;
+
+// The account that authenticates to the relay, which is not always the address
+// mail is sent from. On Mailgun both are addresses on the verified domain and
+// are typically the same one; Gmail and Brevo use one string for both. Others -
+// MailerSend, Resend - issue a generated username that is not an address at
+// all. Defaulted to SMTP_EMAIL so the one-value providers need no SMTP_USER.
+const smtpUser = process.env.SMTP_USER || process.env.SMTP_EMAIL;
 const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
 const smtpPort = Number(process.env.SMTP_PORT) || 587;
 const smtpPassword = process.env.SMTP_PASSWORD;
@@ -40,6 +47,7 @@ module.exports = {
     jwtAccessKey,
     jwtRefreshKey,
     smtpEmail,
+    smtpUser,
     smtpHost,
     smtpPort,
     smtpPassword,
