@@ -364,6 +364,19 @@ const createOrder = async (req, res, next) => {
       )
     );
 
+    // Email the invoice without blocking the response. Rendering the PDF and
+    // handing it to the mail server can take seconds - longer still when SMTP
+    // is unreachable and the send has to time out - and none of that should
+    // sit between a paying customer and their order confirmation. The promise
+    // carries its own catch, so a failure logs rather than surfacing as an
+    // unhandled rejection, and the same invoice stays downloadable either way.
+    sendInvoiceEmail(newOrder._id).catch((error) =>
+      logger.error(
+        `Unexpected failure dispatching invoice email for order ${newOrder._id}:`,
+        error.message
+      )
+    );
+
     return successResponse(res, {
       statusCode: 201,
       message: "Order created successfully",
