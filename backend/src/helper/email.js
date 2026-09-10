@@ -1,6 +1,13 @@
 const nodemailer = require("nodemailer");
 
-const { smtpEmail, smtpPassword, smtpHost, smtpPort } = require("../secret");
+const {
+    smtpEmail,
+    smtpUser,
+    smtpPassword,
+    smtpHost,
+    smtpPort,
+    storeName,
+} = require("../secret");
 const logger = require("./logger");
 
 const transporter = nodemailer.createTransport({
@@ -8,7 +15,14 @@ const transporter = nodemailer.createTransport({
     port: smtpPort,
     secure: smtpPort === 465, // implicit TLS only on port 465
     auth: {
-        user: smtpEmail,
+        // The relay login, which is not always the sender. On Mailgun both are
+        // addresses on the verified domain and are usually the same one, but
+        // they need not be: any address on the domain may appear in From
+        // regardless of which credential authenticated. Providers that issue a
+        // generated username - MailerSend, Resend - make the two differ always.
+        // smtpUser falls back to smtpEmail, so one-value providers need no
+        // SMTP_USER at all.
+        user: smtpUser,
         pass: smtpPassword,
     },
     // Without these nodemailer waits indefinitely. Registration awaits the send
@@ -24,7 +38,12 @@ const transporter = nodemailer.createTransport({
 const emailWithNodeMailer = async (emailData) => {
     try {
         const mailOptions = {
-            from: smtpEmail,
+            // Object form rather than a "Name <addr>" string: nodemailer does the
+            // RFC encoding, so a STORE_NAME containing a comma or an accent
+            // cannot produce a malformed header. Without a display name the
+            // From reads as a bare no-reply address, which mail clients show
+            // less prominently and filters trust less.
+            from: { name: storeName, address: smtpEmail },
             to: emailData.email,
             subject: emailData.subject,
             html: emailData.html,

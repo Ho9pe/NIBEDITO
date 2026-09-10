@@ -10,8 +10,10 @@ Quick reminders that bite most often:
 
 - Every route is mounted under `/api`. The bare root path returns 404 by design;
   use `GET /health` to check the server is up.
-- `NODE_ENV` must be exactly `production` in a deployment or auth cookies go out
-  `SameSite=Strict` and no browser will send them cross-site.
+- `NODE_ENV` must be exactly `production` in a deployment: it is what adds the
+  `Secure` flag to auth cookies. They are `SameSite=Lax` either way, which the
+  single-origin Nginx setup makes sufficient and which is also the app's only
+  CSRF defence — do not loosen it to `None` without adding a token.
 - `morgan` is required at runtime but sits in `devDependencies`, so install with
   dev dependencies included.
 
@@ -116,7 +118,7 @@ Outside `/api`, and the only route there.
 | GET | `/health` | Liveness probe. Always 200 while the process can serve requests; database state is reported in the body rather than as a failing status, so a transient outage does not make the host restart a healthy server. Set this as the platform's health check path. | `{ success, status, database: 'connected'\|'connecting'\|'disconnected'\|'disconnecting', uptime, environment, authCookieMode }` | Public |
 
 `authCookieMode` is the fastest way to confirm a deployment has `NODE_ENV` set
-correctly: it reads `SameSite=None; Secure (cross-site OK)` when it does.
+correctly: it reads `SameSite=Lax; Secure` when it does.
 
 ### Auth Router (`/api/auth`)
 | Method | Endpoint | Description | Request Body | Response | Access |

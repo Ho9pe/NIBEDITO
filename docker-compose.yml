@@ -13,10 +13,29 @@
 
 services:
   mongo:
+    # A single-node replica set, not a standalone. Checkout and the review
+    # endpoints do their writes inside a transaction, and MongoDB only offers
+    # transactions on a replica set - against a standalone every order fails
+    # with "Transaction numbers are only allowed on a replica set member or
+    # mongos". Atlas is a replica set already, so this is what makes the local
+    # stack behave like the deployed one.
     image: mongo:7
+    command: ["--replSet", "rs0", "--bind_ip_all"]
+    # Initiates the set on first boot, then just reports its status. The API
+    # waits on this rather than racing it, because a replica set with no
+    # primary yet refuses writes.
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "try { rs.status().ok } catch (e) { rs.initiate({_id:'rs0',members:[{_id:0,host:'mongo:27017'}]}).ok }"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
     volumes:
       - mongo-data:/data/db
     ports:
+      # Compass and mongosh on the host should connect with
+      # directConnection=true: the replica set advertises itself as
+      # "mongo:27017", which only resolves inside the compose network.
       - "27017:27017"
 
   # Catches outgoing mail so account-activation links can be opened locally
@@ -30,15 +49,18 @@ services:
     build: ./backend
     ports:
       - "3001:3001"
-    volumes:
-      # Mounted rather than baked into the image: it holds real credentials,
-      # and its `KEY = 'value'` spacing is understood by the app's dotenv but
-      # not by compose's own env_file parser.
-      - ./backend/.env:/app/.env:ro
+    # Same mechanism as docker-compose.prod.yml, deliberately. This used to
+    # mount the file into the container instead, because backend/.env was
+    # written as `KEY = 'value'` and compose's own parser does not understand
+    # that spacing while the app's dotenv does. The file is plain `KEY=value`
+    # now, so both stacks can read it the same way - and dev exercising the
+    # same path as production is what stops a parsing difference from being
+    # discovered on the droplet.
+    env_file: ./backend/.env
     environment:
-      # These win over anything in .env, because dotenv does not overwrite
-      # variables that are already set in the environment.
-      MONGODB_ATLAS_URL: mongodb://mongo:27017/nibedito
+      # These win over anything in .env: compose applies `environment` after
+      # `env_file`.
+      MONGODB_ATLAS_URL: mongodb://mongo:27017/nibedito?replicaSet=rs0
       # To work against the real cloud database instead, comment the line above
       # out and the value from backend/.env will be used. Be deliberate about
       # it: that is production data.
@@ -46,15 +68,19 @@ services:
       SMTP_PORT: "1025"
       CLIENT_URL: http://localhost:3000
       SERVER_PORT: "3001"
-      # Deliberately not "production" here. That switches auth cookies to
-      # SameSite=None; Secure, which browsers reject over plain http on
-      # localhost. Strict is correct locally because :3000 and :3001 are the
-      # same site. On a real deployment, where the two are on different hosts,
-      # NODE_ENV must be "production" or logins will not persist.
+      # Deliberately not "production" here. That adds Secure to the auth
+      # cookies, and a Secure cookie is discarded by the browser over plain
+      # http, so nothing would keep you signed in on localhost. SameSite is
+      # Lax in both environments and does not depend on this.
       NODE_ENV: development
     depends_on:
-      - mongo
-      - mail
+      # Waits for the replica set to have a primary. Starting the API as soon
+      # as the container is up is not enough: mongo accepts the connection
+      # before rs.initiate() has completed, and writes fail until it has.
+      mongo:
+        condition: service_healthy
+      mail:
+        condition: service_started
 
   web:
     build:

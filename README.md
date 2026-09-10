@@ -163,9 +163,12 @@ returns 500 if the activation email cannot be sent.
 | `JWT_ACCESS_KEY` | Signs access tokens (15 minute lifetime) |
 | `JWT_REFRESH_KEY` | Signs refresh tokens (7 day lifetime) |
 | `JWT_ACTIVATION_KEY` | Signs account-activation and password-reset links |
-| `SMTP_EMAIL` / `SMTP_PASSWORD` | Mail account credentials |
-| `SMTP_HOST` / `SMTP_PORT` | Optional. Defaults to `smtp.gmail.com` and `587`. Compose points these at the local mail catcher |
-| `STORE_NAME` / `STORE_ADDRESS` / `STORE_EMAIL` / `STORE_PHONE` | Optional. Printed in the header of invoice PDFs. Default to `Nibedito`, `Dhaka, Bangladesh`, `SMTP_EMAIL` and blank |
+| `SMTP_EMAIL` | The From address. Providers that verify domains — Mailgun among them — refuse anything not on a domain you own |
+| `SMTP_USER` | Optional. The relay login when it differs from the From address. Falls back to `SMTP_EMAIL`, which is the usual case on Mailgun |
+| `SMTP_PASSWORD` | Relay password. On Mailgun this is the SMTP user's password, not the account API key |
+| `SMTP_HOST` / `SMTP_PORT` | Optional. Defaults to `smtp.gmail.com` and `587`. Mailgun is `smtp.mailgun.org`. Compose points these at the local mail catcher |
+| `STORE_NAME` | Optional, defaults to `Nibedito`. Display name on outgoing mail, and the header on invoice PDFs |
+| `STORE_ADDRESS` / `STORE_EMAIL` / `STORE_PHONE` | Optional. Printed on invoice PDFs. Default to `Dhaka, Bangladesh`, `SMTP_EMAIL` and blank |
 | `CLOUDINARY_CLOUD_NAME` / `CLOUDINARY_API_KEY` / `CLOUDINARY_API_SECRET` | Product and profile image uploads |
 | `DEFAULT_USER_PICTURE` | Fallback avatar URL |
 | `DEFAULT_USER_PASSWORD` | Password for the seeded customer accounts, used by `seed-dev.js` and `seedTestUsers.js`. Must satisfy the password rule below — 8+ characters with an uppercase letter, a lowercase letter and a number — or those accounts are skipped |
@@ -236,24 +239,28 @@ at runtime. Setting `NEXT_PUBLIC_API_URL` as a container environment variable
 does nothing. Changing it requires rebuilding the frontend image, and on a
 hosting platform it means a fresh build (clear the build cache), not a restart.
 
-### `NODE_ENV` decides whether login works at all
+### `NODE_ENV` decides whether cookies carry `Secure`
 
-Auth cookies are only sent with `SameSite=None; Secure` when `NODE_ENV` is
-exactly `production`. Otherwise they go out `SameSite=Strict`.
+Auth cookies are `SameSite=Lax` in every environment. `NODE_ENV` controls one
+thing: whether they also carry the `Secure` flag.
 
-- **Locally** you want `development`. Frontend and API are both on `localhost`,
-  which counts as the same site, and `Secure` cookies would be rejected over
-  plain http.
-- **Deployed**, where the frontend and API are on different hosts, `production`
-  is required. Without it the browser silently refuses to send the cookie, login
-  appears to succeed, and every subsequent request arrives unauthenticated —
-  which looks exactly like being logged out at random.
+- **Locally** you want `development`. `Secure` cookies are rejected over plain
+  http, so setting `production` here means the browser stores nothing and you
+  cannot stay signed in.
+- **Deployed**, `production` is required. https demands `Secure`, and without it
+  the cookie travels in the clear.
+
+`Lax` is sufficient because Nginx serves the frontend and the API from one
+origin split by path, so the browser treats every API call as same-site. It is
+also what keeps a form on another domain from making authenticated requests as
+the signed-in user — there is no CSRF token in the app, so the cookie policy is
+the whole defence. Do not switch these to `SameSite=None` without adding one.
 
 `GET /health` reports which mode is active:
 
 ```json
 { "status": "ok", "database": "connected", "environment": "production",
-  "authCookieMode": "SameSite=None; Secure (cross-site OK)" }
+  "authCookieMode": "SameSite=Lax; Secure" }
 ```
 
 ### `morgan` is a runtime dependency in the wrong section
