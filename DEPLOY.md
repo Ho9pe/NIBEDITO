@@ -19,12 +19,16 @@ None of the three run on the droplet.
 
 On your machine, if you do not already have one:
 
-```bash
+```powershell
 ssh-keygen -t ed25519 -C "nibedito-droplet"
 ```
 
-Add the **public** key (`~/.ssh/id_ed25519.pub`) to DigitalOcean when creating
-the droplet. Keep the private key private; it never leaves your machine.
+Add the **public** key (`%USERPROFILE%\.ssh\id_ed25519.pub`) to DigitalOcean when
+creating the droplet. Keep the private key private; it never leaves your machine.
+
+This is your personal key and should have a passphrase. CI gets a second,
+separate one in step 7 - it cannot type a passphrase, so the two cannot be the
+same key.
 
 ## 2. Create the droplet
 
@@ -112,8 +116,11 @@ Repository Settings -> Secrets and variables -> Actions.
 | `DROPLET_USER` | `deploy` |
 | `DROPLET_SSH_KEY` | private key of a keypair generated *for deployment*, whose public half is in `/home/deploy/.ssh/authorized_keys` |
 
-Generate a separate keypair for this rather than pasting your personal one - a
-key held by CI should only ever be able to reach this one server.
+Generate a separate keypair for this rather than pasting your personal one. Two
+reasons, and the first is not optional: CI cannot type a passphrase, so this key
+has to have none - which already makes it a different key from the one in step 1,
+which should have one. The second is blast radius. A passphrase-less private key
+sitting in a secret store should reach exactly one server as exactly one user.
 
 Miss any of the three and the `preflight` job fails within seconds and names the
 ones that are missing. It runs alongside the build rather than behind it, so you
@@ -121,6 +128,62 @@ find out immediately rather than three minutes in. An unset secret is an empty
 string rather than an error, so without that check the run got as far as the SSH
 step and failed with `error: missing server host` - which names neither the
 secret nor the fact that a secret is what is missing.
+
+### Making the CI key
+
+Generate it on **your machine**, not on the droplet. The private key's job is to
+live in the GitHub secret; generating it on the droplet would put a key that logs
+into that machine onto that machine, for no benefit, and leave you to remember to
+delete it. Only the public half travels.
+
+In PowerShell:
+
+```powershell
+ssh-keygen -t ed25519 -C "nibedito-ci" -f "$env:USERPROFILE\.ssh\nibedito_ci"
+```
+
+Press Enter twice at the passphrase prompts to leave it empty. That writes
+`nibedito_ci` (private) and `nibedito_ci.pub` (public).
+
+Append the public half to the `deploy` user on the droplet, over your existing
+access from step 3:
+
+```powershell
+$pub = (Get-Content "$env:USERPROFILE\.ssh\nibedito_ci.pub" -Raw).Trim()
+ssh deploy@<droplet-ip> "mkdir -p ~/.ssh && chmod 700 ~/.ssh && printf '\n%s\n' '$pub' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
+```
+
+Reading the file into a variable first, rather than piping it, is deliberate:
+PowerShell writes CRLF line endings into a pipe, and a stray carriage return in
+`authorized_keys` stops the key matching while looking perfectly correct.
+Nothing is overwritten either - your personal key stays alongside it, so this
+cannot lock you out.
+
+Test it before handing it to CI:
+
+```powershell
+ssh -i "$env:USERPROFILE\.ssh\nibedito_ci" -o IdentitiesOnly=yes deploy@<droplet-ip> "whoami && pwd"
+```
+
+`IdentitiesOnly=yes` matters. Without it ssh falls back to your personal key, and
+a login that succeeds for the wrong reason tells you nothing. Expect `deploy` and
+`/home/deploy`, with no prompt.
+
+Then copy the private key into the clipboard, whole:
+
+```powershell
+Get-Content "$env:USERPROFILE\.ssh\nibedito_ci" -Raw | Set-Clipboard
+```
+
+Paste that as `DROPLET_SSH_KEY`. It must include the `-----BEGIN OPENSSH PRIVATE
+KEY-----` and `-----END OPENSSH PRIVATE KEY-----` lines and the trailing newline;
+a truncated paste fails with an authentication error that says nothing about the
+key being malformed.
+
+Keep `~/.ssh/nibedito_ci` on your machine - rotating the secret later needs it,
+and it must never be committed. To revoke CI's access, delete the line ending in
+`nibedito-ci` from `/home/deploy/.ssh/authorized_keys`; that is what the `-C`
+comment is for.
 
 **Variables:**
 
@@ -134,9 +197,14 @@ build has run means rebuilding, not restarting.
 
 ## 8. Merge to main, and publish the images
 
-```bash
-git checkout main && git merge develop && git push
+```powershell
+git checkout main
+git merge develop
+git push
 ```
+
+Three separate commands, not chained: Windows PowerShell 5.1 has no `&&`, and
+writing it that way is a parser error rather than a failed merge.
 
 This is what puts the current code on the branch everything else reads from. The
 droplet clones `main` in the next step and the workflow builds images from it,
@@ -244,9 +312,10 @@ That resolves the host, authenticates, and sends a real message using the same
 nodemailer transport the app does. It reports which stage failed rather than a
 bare timeout. Run it from `~/NIBEDITO` on the droplet, where the values in
 `backend/.env` are the ones in play. To test the same credentials from your own
-machine first, override the compose defaults that point at the local catcher:
+machine first, override the compose defaults that point at the local catcher
+(PowerShell, from the repository root):
 
-```bash
+```powershell
 docker compose run --rm -e SMTP_HOST=smtp.mailgun.org -e SMTP_PORT=587 -e SMTP_USER=no-reply@nibedito.com -e SMTP_EMAIL=no-reply@nibedito.com -e STORE_NAME=Nibedito -e SMTP_PASSWORD='YOUR_SMTP_PASSWORD' api node scripts/check-smtp.js you@example.com
 ```
 
