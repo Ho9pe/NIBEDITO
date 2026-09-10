@@ -30,7 +30,16 @@ const nextConfig: NextConfig = {
         pathname: '/**',
       },
     ],
-    domains: ['res.cloudinary.com'],
+    // `domains` used to sit here alongside these patterns. It is deprecated in
+    // Next 15, and it allowed every path on res.cloudinary.com - which quietly
+    // undid the point of pinning the cloud name above.
+    //
+    // Optimisation stays off. Next would otherwise resize and re-encode every
+    // image in-process on a 1-2 GB droplet that is also running the API, and
+    // Cloudinary already does that work at the CDN edge - utils/imageUtils.ts
+    // builds the transformation into the URL. Note that while this is true the
+    // remotePatterns above are not enforced at all, since no image passes
+    // through the optimiser; they matter the moment this is turned off.
     unoptimized: true,
   },
 };

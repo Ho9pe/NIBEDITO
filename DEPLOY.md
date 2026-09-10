@@ -57,11 +57,28 @@ usermod -aG docker deploy
 
 ## 5. External accounts
 
-- **MongoDB Atlas** - free M0 cluster, region Mumbai (`ap-south-1`). Create a
-  database user. Network Access must be `0.0.0.0/0`: the droplet's outbound
-  address is not guaranteed stable, and an IP allowlist will lock you out of
-  your own database at the worst moment. The user's password is the real
-  boundary, so make it long and random.
+- **MongoDB Atlas** - free M0 cluster, project `Nibedito`, cluster `NibeditoDB`,
+  region Singapore (`ap-southeast-1`). Mumbai (`ap-south-1`) is the better choice
+  on latency if you are creating one fresh - roughly 20-25 ms round trip from the
+  Bangalore droplet against 60-80 ms to Singapore, paid on every query. Decide at
+  creation time: an M0 cannot change region, so moving later means a new cluster
+  plus a dump and restore.
+
+  Network Access lists the droplet's public IP, not `0.0.0.0/0`. A DigitalOcean
+  droplet keeps its public IPv4 for its whole life, so the allowlist is stable in
+  practice and is the tighter of the two options - worth having while the
+  application user still holds a broad role. Two consequences to know. Rebuilding
+  or replacing the droplet issues a new address and the old entry silently stops
+  matching; the symptom is `/health` reporting `"database": "disconnected"` while
+  the process itself is fine, so check the access list before debugging anything
+  else. And your own workstation needs its own entry to run `mongodump`, Compass
+  or any of `backend/scripts/` against the cluster - Atlas adds your current
+  address during setup, but a residential IP rotates and will need re-adding.
+
+  Use `0.0.0.0/0` only when the client address genuinely is not stable. It makes
+  the database user's password the sole boundary, which is survivable with a user
+  scoped to `readWrite` on the application database and much less so with
+  `atlasAdmin`, which can drop every database in the cluster.
 - **Cloudinary** - free tier. Note the cloud name; it appears in
   `next.config.ts` and must match.
 - **Mailgun** - free tier, 100 mails/day, permanent, no card required. Add
