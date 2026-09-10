@@ -19,6 +19,7 @@ const nodemailer = require("nodemailer");
 const {
   smtpEmail,
   smtpUser,
+  storeName,
   smtpPassword,
   smtpHost,
   smtpPort,
@@ -50,7 +51,7 @@ const HINTS = {
   console.log("  port:     ", smtpPort);
   console.log("  secure:   ", smtpPort === 465);
   console.log("  user:     ", smtpUser || "(not set)");
-  console.log("  from:     ", smtpEmail || "(not set)");
+  console.log("  from:     ", smtpEmail ? `${storeName} <${smtpEmail}>` : "(not set)");
   console.log(
     "  password: ",
     smtpPassword ? `set, ${smtpPassword.length} characters` : "(NOT SET)"
@@ -76,7 +77,11 @@ const HINTS = {
     if (recipient) {
       const sendStarted = Date.now();
       const info = await transporter.sendMail({
-        from: smtpEmail,
+        // Matches helper/email.js exactly, display name included. A test that
+        // sends a bare address tells you the relay works but shows a different
+        // From in the inbox than the application produces, which reads as a
+        // bug in the app when it is only a difference in this script.
+        from: { name: storeName, address: smtpEmail },
         to: recipient,
         subject: "Nibedito SMTP test",
         html:
