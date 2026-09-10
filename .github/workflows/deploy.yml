@@ -20,6 +20,45 @@ env:
   WEB_IMAGE: ghcr.io/ho9pe/nibedito-web
 
 jobs:
+  # Its own job rather than a step inside deploy, and with no `needs`, so it
+  # runs alongside the build instead of behind it. An unset secret is an empty
+  # string rather than an error, so the failure otherwise surfaced only after
+  # the build had spent three minutes - as "error: missing server host" from a
+  # vendored Go binary, naming neither the secret nor the fact that a secret is
+  # what is missing. This answers the same question in about five seconds.
+  #
+  # The build is deliberately left to finish anyway: images pushed to ghcr are
+  # useful even when the deploy cannot run, and re-running this workflow once
+  # the secrets exist needs no new commit.
+  preflight:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check deployment secrets are set
+        env:
+          DROPLET_HOST: ${{ secrets.DROPLET_HOST }}
+          DROPLET_USER: ${{ secrets.DROPLET_USER }}
+          DROPLET_SSH_KEY: ${{ secrets.DROPLET_SSH_KEY }}
+        run: |
+          missing=""
+          # Only names are ever printed. Echoing a value would put it in a log
+          # readable by anyone with repository access, and GitHub's masking
+          # does not cover a secret you deliberately print.
+          for name in DROPLET_HOST DROPLET_USER DROPLET_SSH_KEY; do
+            if [ -z "${!name}" ]; then
+              missing="$missing $name"
+            fi
+          done
+
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secret(s):$missing"
+            echo "Set them under Settings -> Secrets and variables -> Actions."
+            echo "See DEPLOY.md step 9. Re-run this workflow once they exist;"
+            echo "no new commit is needed."
+            exit 1
+          fi
+
+          echo "All three deployment secrets are present."
+
   build:
     runs-on: ubuntu-latest
     permissions:
@@ -67,7 +106,7 @@ jobs:
           cache-to: type=gha,mode=max
 
   deploy:
-    needs: build
+    needs: [preflight, build]
     runs-on: ubuntu-latest
     steps:
       - name: Pull and restart on the droplet

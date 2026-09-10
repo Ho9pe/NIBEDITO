@@ -31,7 +31,7 @@ the droplet. Keep the private key private; it never leaves your machine.
 | Setting | Value |
 |---|---|
 | Image | Ubuntu 24.04 LTS |
-| Region | Bangalore (`blr1`) |
+| Region | Singapore (`sgp1`) |
 | Plan | Basic / Regular, 1-2 GB |
 | Authentication | SSH key, not password |
 | Monitoring | enabled (free) |
@@ -58,11 +58,7 @@ usermod -aG docker deploy
 ## 5. External accounts
 
 - **MongoDB Atlas** - free M0 cluster, project `Nibedito`, cluster `NibeditoDB`,
-  region Singapore (`ap-southeast-1`). Mumbai (`ap-south-1`) is the better choice
-  on latency if you are creating one fresh - roughly 20-25 ms round trip from the
-  Bangalore droplet against 60-80 ms to Singapore, paid on every query. Decide at
-  creation time: an M0 cannot change region, so moving later means a new cluster
-  plus a dump and restore.
+  region Singapore (`ap-southeast-1`).
 
   Network Access lists the droplet's public IP, not `0.0.0.0/0`. A DigitalOcean
   droplet keeps its public IPv4 for its whole life, so the allowlist is stable in
@@ -75,23 +71,16 @@ usermod -aG docker deploy
   or any of `backend/scripts/` against the cluster - Atlas adds your current
   address during setup, but a residential IP rotates and will need re-adding.
 
-  Use `0.0.0.0/0` only when the client address genuinely is not stable. It makes
-  the database user's password the sole boundary, which is survivable with a user
-  scoped to `readWrite` on the application database and much less so with
-  `atlasAdmin`, which can drop every database in the cluster.
+  Edit: I added 0.0.0.0/0 to the access list, Might remove it later.
+
 - **Cloudinary** - free tier. Note the cloud name; it appears in
   `next.config.ts` and must match.
+
 - **Mailgun** - free tier, 100 mails/day, permanent, no card required. Add
   `nibedito.com` under Sending -> Domains and install the DNS records it gives
   you (step 6); sending from an unverified domain is refused outright. Then
   Domain settings -> SMTP Credentials -> Add new SMTP user, e.g.
-  `no-reply@nibedito.com`, and keep the password it shows once. That password is
-  not the API key - the API key authenticates the HTTP API, which this app does
-  not use. New accounts also get a sandbox domain that can only reach a handful
-  of authorised addresses; ignore it, the verified domain has no such limit.
-  Registration deletes the new account if its activation mail fails to send, so
-  this is not optional infrastructure, and 100/day is a real ceiling: past it,
-  signups start failing and taking the accounts with them.
+  `no-reply@nibedito.com`,
 
 ## 6. DNS, at Cloudflare
 
@@ -100,12 +89,7 @@ usermod -aG docker deploy
 | A | `nibedito.com` | droplet IP | **DNS only** |
 | A | `www` | droplet IP | **DNS only** |
 
-Grey cloud, not orange. Proxying sends Bangladeshi visitors out to a Cloudflare
-edge and back rather than straight to Bangalore, which costs latency here
-instead of saving it. Certbot on the droplet issues the certificate, so nothing
-is lost by skipping Cloudflare's.
-
-Add Mailgun's records here too - SPF (TXT), DKIM (TXT), the tracking CNAME, and
+Add Mailgun's records here - SPF (TXT), DKIM (TXT), the tracking CNAME, and
 the DMARC record it generates - then hit Check status in Mailgun until the
 sending records read Verified and Active. The MX records Mailgun also offers are
 for *receiving* mail and this app never receives any; leaving them unverified is
@@ -113,51 +97,10 @@ correct and does not hold sending back. Skipping the sending records means
 activation mail lands in spam, and Mailgun will not send from an address on an
 unverified domain at all.
 
-## 7. Environment file
+## 7. GitHub secrets and variables
 
-```bash
-git clone https://github.com/Ho9pe/NIBEDITO.git ~/NIBEDITO
-cd ~/NIBEDITO
-cp backend/.env.example backend/.env
-```
-
-Fill in `backend/.env`. The values that must change from the example:
-
-| Variable | Value |
-|---|---|
-| `NODE_ENV` | `production` |
-| `CLIENT_URL` | `https://nibedito.com` - no trailing slash, no `www` |
-| `MONGODB_ATLAS_URL` | the Atlas connection string |
-| `JWT_ACCESS_KEY` / `JWT_REFRESH_KEY` / `JWT_ACTIVATION_KEY` | three fresh random strings, not the development ones |
-| `SMTP_EMAIL` | the From address, e.g. `no-reply@nibedito.com` - must be on the verified domain |
-| `SMTP_USER` | the Mailgun SMTP user. Same as `SMTP_EMAIL` in the usual case, and can be omitted then |
-| `SMTP_PASSWORD` | that SMTP user's password - **not** the account API key |
-| `SMTP_HOST` / `SMTP_PORT` | `smtp.mailgun.org` / `587` (`smtp.eu.mailgun.org` on the EU region) |
-| `STORE_NAME` | display name on outgoing mail as well as on invoices |
-| `CLOUDINARY_*` | Cloudinary credentials |
-| `SUPER_ADMIN_*` | the admin account you will sign in with |
-
-Generate the JWT keys with `openssl rand -base64 48`, once each.
-
-There is no `frontend/.env.local` on the droplet. The frontend's three
-`NEXT_PUBLIC_*` values are baked into its image at build time by the workflow -
-`NEXT_PUBLIC_API_URL` is hardcoded there, the other two come from repository
-variables (step 9).
-
-## 8. Nginx and the certificate
-
-```bash
-apt install nginx certbot python3-certbot-nginx
-cp ~/NIBEDITO/deploy/nginx/nibedito.com.conf /etc/nginx/sites-available/
-ln -s /etc/nginx/sites-available/nibedito.com.conf /etc/nginx/sites-enabled/
-rm /etc/nginx/sites-enabled/default
-nginx -t && systemctl reload nginx
-certbot --nginx -d nibedito.com -d www.nibedito.com
-```
-
-Certbot rewrites the config to add TLS and installs its own renewal timer.
-
-## 9. GitHub secrets and variables
+Before the merge, not after: the first push to `main` starts a workflow run, and
+a run that finds no secrets cannot deploy.
 
 Repository Settings -> Secrets and variables -> Actions.
 
@@ -172,6 +115,13 @@ Repository Settings -> Secrets and variables -> Actions.
 Generate a separate keypair for this rather than pasting your personal one - a
 key held by CI should only ever be able to reach this one server.
 
+Miss any of the three and the `preflight` job fails within seconds and names the
+ones that are missing. It runs alongside the build rather than behind it, so you
+find out immediately rather than three minutes in. An unset secret is an empty
+string rather than an error, so without that check the run got as far as the SSH
+step and failed with `error: missing server host` - which names neither the
+secret nor the fact that a secret is what is missing.
+
 **Variables:**
 
 | Name | Value |
@@ -179,22 +129,99 @@ key held by CI should only ever be able to reach this one server.
 | `NEXT_PUBLIC_CLOUDINARY_URL` | `https://res.cloudinary.com/<cloud-name>` |
 | `NEXT_PUBLIC_WHATSAPP_PHONE_NUMBER` | e.g. `8801700000000`, no `+` |
 
-Then, once the first workflow run has pushed the images, make both packages
-public under github.com/users/Ho9pe/packages, or the droplet's `docker pull`
-fails with `denied`.
+These are baked into the frontend image at build time, so setting them after the
+build has run means rebuilding, not restarting.
 
-## 10. First deploy
+## 8. Merge to main, and publish the images
 
-Merge to `main` (or run the workflow manually from the Actions tab). Then on the
-droplet:
+```bash
+git checkout main && git merge develop && git push
+```
+
+This is what puts the current code on the branch everything else reads from. The
+droplet clones `main` in the next step and the workflow builds images from it,
+so doing it later means cloning a stale `.env.example` and deploying stale code.
+
+**The deploy job will fail on this first run, and that is expected.** It SSHes in
+and runs `cd ~/NIBEDITO`, which does not exist yet - that is step 9. The `build`
+job is the one that matters here: it pushes `nibedito-api` and `nibedito-web` to
+ghcr, and those images are what the droplet pulls.
+
+Once the build has pushed them, make both packages **public** under
+github.com/users/Ho9pe/packages. Otherwise the droplet's `docker pull` fails with
+`denied`, and the error says nothing about visibility.
+
+## 9. Clone and configure
+
+```bash
+git clone https://github.com/Ho9pe/NIBEDITO.git ~/NIBEDITO
+cd ~/NIBEDITO
+cp backend/.env.example backend/.env
+```
+
+The clone follows the default branch, `main` - which is why step 8 comes first.
+
+Fill in `backend/.env`. The values that must change from the example:
+
+| Variable | Value |
+|---|---|
+| `NODE_ENV` | `production` |
+| `CLIENT_URL` | `https://nibedito.com` - no trailing slash, no `www` |
+| `MONGODB_ATLAS_URL` | the Atlas connection string, **including the database name** before the `?` - without it Mongoose connects to `test` and the app works while storing nothing you can find |
+| `JWT_ACCESS_KEY` / `JWT_REFRESH_KEY` / `JWT_ACTIVATION_KEY` | three fresh random strings, not the development ones |
+| `SMTP_EMAIL` | the From address, e.g. `no-reply@nibedito.com` - must be on the verified domain |
+| `SMTP_USER` | the Mailgun SMTP user. Same as `SMTP_EMAIL` in the usual case, and can be omitted then |
+| `SMTP_PASSWORD` | that SMTP user's password - **not** the account API key |
+| `SMTP_HOST` / `SMTP_PORT` | `smtp.mailgun.org` / `587` (`smtp.eu.mailgun.org` on the EU region) |
+| `STORE_NAME` | display name on outgoing mail as well as on invoices |
+| `CLOUDINARY_*` | Cloudinary credentials |
+| `SUPER_ADMIN_*` | the admin account you will sign in with |
+
+Generate the JWT keys with `openssl rand -base64 48`, once each.
+
+Write it as plain `KEY=value`, unquoted and with no spaces around the `=`.
+`docker-compose.prod.yml` hands this file to the container with `env_file`, and
+compose's parser is not dotenv: a line written `KEY = 'value'` yields a variable
+whose name has a trailing space, which the app then reads as unset.
+
+There is no `frontend/.env.local` on the droplet. The frontend's three
+`NEXT_PUBLIC_*` values are baked into its image at build time by the workflow -
+`NEXT_PUBLIC_API_URL` is hardcoded there, the other two come from repository
+variables (step 7).
+
+## 10. Nginx and the certificate
+
+```bash
+apt install nginx certbot python3-certbot-nginx
+cp ~/NIBEDITO/deploy/nginx/nibedito.com.conf /etc/nginx/sites-available/
+ln -s /etc/nginx/sites-available/nibedito.com.conf /etc/nginx/sites-enabled/
+rm /etc/nginx/sites-enabled/default
+nginx -t && systemctl reload nginx
+certbot --nginx -d nibedito.com -d www.nibedito.com
+```
+
+Certbot rewrites the config to add TLS and installs its own renewal timer. Its
+HTTP-01 challenge has to reach this droplet directly, so both A records must
+already resolve here and must be **DNS only** in Cloudflare - proxied, Cloudflare
+answers the challenge instead and issuance fails.
+
+## 11. First start
+
+The droplet has never run the stack, so this first one is by hand. Every deploy
+after it is just a merge to `main`.
 
 ```bash
 cd ~/NIBEDITO
+docker compose -f docker-compose.prod.yml pull
 docker compose -f docker-compose.prod.yml up -d
 docker compose -f docker-compose.prod.yml exec api node src/scripts/createDefaultAdmin.js
 ```
 
-## 11. Verify
+`NibeditoDB` starts empty, so after this you have an admin login and no
+catalogue. Products go in through the admin UI: `scripts/seed-dev.js` refuses to
+run against a hosted cluster by design.
+
+## 12. Verify
 
 `https://nibedito.com/health` should report:
 
@@ -220,7 +247,7 @@ bare timeout. Run it from `~/NIBEDITO` on the droplet, where the values in
 machine first, override the compose defaults that point at the local catcher:
 
 ```bash
-docker compose run --rm -e SMTP_HOST=smtp.mailgun.org -e SMTP_PORT=587 -e SMTP_USER=no-reply@nibedito.com -e SMTP_EMAIL=no-reply@nibedito.com -e SMTP_PASSWORD='the-smtp-password' api node scripts/check-smtp.js you@example.com
+docker compose run --rm -e SMTP_HOST=smtp.mailgun.org -e SMTP_PORT=587 -e SMTP_USER=no-reply@nibedito.com -e SMTP_EMAIL=no-reply@nibedito.com -e STORE_NAME=Nibedito -e SMTP_PASSWORD='YOUR_SMTP_PASSWORD' api node scripts/check-smtp.js you@example.com
 ```
 
 Then walk one real path end to end: register, receive and click the activation
