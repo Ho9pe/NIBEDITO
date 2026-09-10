@@ -66,17 +66,28 @@ const handleLogin = async (req, res, next) => {
     const accessToken = createJSONWebToken(userInfo, jwtAccessKey, "15m");
     const refreshToken = createJSONWebToken(userInfo, jwtRefreshKey, "7d");
 
+    // SameSite=Lax, not None. These were None because the frontend and the API
+    // were expected to sit on different hosts, and None is what lets a cookie
+    // travel cross-site - but it also means the browser attaches it to
+    // requests originating from any other origin, and a form POST carrying
+    // credentials needs no preflight to succeed. With no CSRF token anywhere
+    // in the app, that was a hole. Nginx now serves both from nibedito.com and
+    // splits on path, so every API call is same-site, Lax sends the cookie
+    // normally, and a cross-site request cannot borrow the session.
+    //
+    // Secure still tracks NODE_ENV: it is required over https and would stop
+    // the cookie being stored at all over plain http locally.
     res.cookie("accessToken", accessToken, {
       maxAge: 15 * 60 * 1000, // 15 minutes
       httpOnly: true,
       secure: nodeEnv === "production",
-      sameSite: nodeEnv === "production" ? "None" : "strict",
+      sameSite: "lax",
     });
     res.cookie("refreshToken", refreshToken, {
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
       httpOnly: true,
       secure: nodeEnv === "production",
-      sameSite: nodeEnv === "production" ? "None" : "strict",
+      sameSite: "lax",
     });
 
     logger.debug("User logged in successfully", userInfo);
@@ -97,12 +108,12 @@ const handleLogout = async (req, res, next) => {
     res.clearCookie("accessToken", {
       httpOnly: true,
       secure: nodeEnv === "production",
-      sameSite: nodeEnv === "production" ? "None" : "strict",
+      sameSite: "lax",
     });
     res.clearCookie("refreshToken", {
       httpOnly: true,
       secure: nodeEnv === "production",
-      sameSite: nodeEnv === "production" ? "None" : "strict",
+      sameSite: "lax",
     });
     logger.debug("User logged out successfully", req.user);
     return successResponse(res, {
@@ -242,7 +253,7 @@ const handleRefreshToken = async (req, res, next) => {
       maxAge: 15 * 60 * 1000, // 15 minutes
       httpOnly: true,
       secure: nodeEnv === "production",
-      sameSite: nodeEnv === "production" ? "None" : "strict",
+      sameSite: "lax",
     });
     return successResponse(res, {
       statusCode: 200,

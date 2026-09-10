@@ -183,122 +183,173 @@ const createOrder = async (req, res, next) => {
       );
     }
 
-    // Update the stock of the products and update totalSold count
-    logger.debug("Updating product stock and totalSold count...");
-    for (let item of cart.items) {
-      logger.debug(
-        `Processing item: Product ID ${item.product}, Variant ID ${item.variant._id}, Quantity ${item.quantity}`
-      );
-      const product = await Product.findById(item.product);
+    // Everything above this point only reads and validates. Everything below
+    // mutates, and none of it may half-happen. The previous version walked the
+    // cart decrementing stock one product at a time with a plain save(), so a
+    // checkout that failed on the third item had already permanently removed
+    // stock for the first two, with no order to account for it; the same held
+    // for coupon usage, which could be spent by an order that was never
+    // written. One transaction now spans stock, coupon, order, payment and the
+    // cart, so any failure below rolls back all of it.
+    const session = await mongoose.startSession();
 
-      if (!product) {
-        logger.debug(`Product not found: ${item.product}`);
-        throw createError(404, "Product not found");
-      }
+    let newOrder;
 
-      logger.debug(
-        `Found product: ${product.name}, Current totalSold: ${product.totalSold}`
-      );
+    try {
+      // withTransaction, not a bare startTransaction: when two customers check
+      // out the same product at the same moment both updates touch the same
+      // document, and MongoDB resolves that by aborting one of them with a
+      // WriteConflict labelled TransientTransactionError - an instruction to
+      // retry, not an answer. Left unhandled it reached the customer as a 500
+      // for a request that should either have gone through or been told the
+      // item was gone. withTransaction re-runs the callback for exactly those
+      // errors and lets every other one through untouched, so an out-of-stock
+      // rejection still comes back as its own 400 on the retry.
+      //
+      // The callback can therefore run more than once, which is why nothing in
+      // it mutates a document that was loaded outside it.
+      await session.withTransaction(async () => {
+        logger.debug("Updating product stock and totalSold count...");
 
-      let variantFound = false;
-
-      for (let variant of product.variants) {
-        if (variant._id.toString() === item.variant._id.toString()) {
-          logger.debug(
-            `Found variant: Color ${variant.color}, Size ${variant.size}, Current stock: ${variant.quantity}`
+        for (const item of cart.items) {
+          // The stock check and the decrement are one atomic update rather than
+          // a read, a comparison and a save. Split across three round trips, two
+          // simultaneous checkouts for the last unit both saw it as available
+          // and both succeeded. Here the `$gte` is part of the update's own match
+          // condition, so whichever request arrives second matches no document
+          // and is rejected instead of overselling.
+          const result = await Product.updateOne(
+            {
+              _id: item.product,
+              variants: {
+                $elemMatch: {
+                  _id: item.variant._id,
+                  quantity: { $gte: item.quantity },
+                },
+              },
+            },
+            {
+              // `variants.$` is the element matched by the $elemMatch above.
+              $inc: {
+                "variants.$.quantity": -item.quantity,
+                totalSold: item.quantity,
+              },
+            },
+            { session }
           );
 
-          if (variant.quantity < item.quantity) {
+          if (result.matchedCount === 0) {
+            // Three different situations produce no match - missing product,
+            // missing variant, insufficient stock - and the customer deserves to
+            // know which. Reading the product back is only worth it here, on the
+            // path that is already failing.
+            const product = await Product.findById(item.product)
+              .select("name variants")
+              .session(session)
+              .lean();
+
+            if (!product) {
+              throw createError(404, "Product not found");
+            }
+
+            const variant = product.variants.find(
+              (v) => v._id.toString() === item.variant._id.toString()
+            );
+
+            if (!variant) {
+              throw createError(
+                400,
+                `Variant not found for product ${product.name}`
+              );
+            }
+
             throw createError(
               400,
               `Not enough stock for ${product.name} (${variant.color}, ${variant.size})`
             );
           }
-
-          logger.debug(
-            `Reducing stock from ${variant.quantity} to ${
-              variant.quantity - item.quantity
-            }`
-          );
-          variant.quantity -= item.quantity;
-          variantFound = true;
         }
-      }
 
-      if (!variantFound) {
-        logger.debug(`Variant not found: ${item.variant._id}`);
-        throw createError(400, `Variant not found for product ${product.name}`);
-      }
+        // Coupon usage. Written as database operations against a document read
+        // inside the transaction, rather than by mutating the `coupon` loaded
+        // during validation and saving it. A retry re-runs this block, and an
+        // in-memory `timesUsed += 1` would then count twice against a rollback
+        // that only undid one of them.
+        if (coupon && couponId) {
+          const current = await Coupon.findById(coupon._id)
+            .select("usedBy")
+            .session(session)
+            .lean();
 
-      // Update totalSold count
-      logger.debug(
-        `Increasing totalSold from ${product.totalSold || 0} to ${
-          (product.totalSold || 0) + item.quantity
-        }`
-      );
-      product.totalSold = (product.totalSold || 0) + item.quantity;
+          const usage = current?.usedBy?.find(
+            (u) => u.userId.toString() === userId.toString()
+          );
 
-      await product.save();
-      logger.debug(
-        `Product updated successfully: ${product.name}, New totalSold: ${product.totalSold}`
-      );
+          if (usage) {
+            await Coupon.updateOne(
+              { _id: coupon._id, "usedBy.userId": userId },
+              { $inc: { "usedBy.$.timesUsed": 1 } },
+              { session }
+            );
+          } else {
+            await Coupon.updateOne(
+              { _id: coupon._id },
+              { $push: { usedBy: { userId, timesUsed: 1 } } },
+              { session }
+            );
+          }
+        }
+
+        // Format cart items costs to 2 decimal places
+        const formattedItems = cart.items.map((item) => ({
+          product: item.product,
+          variant: item.variant._id,
+          quantity: item.quantity,
+          cost: parseFloat(item.cost.toFixed(2)),
+        }));
+
+        newOrder = new Order({
+          user: userId,
+          items: formattedItems,
+          street,
+          city,
+          state,
+          addressDetails,
+          phone,
+          email,
+          totalPrice: parseFloat(cart.totalPrice.toFixed(2)),
+          shippingRegion: shippingRegion,
+          shippingCost: parseFloat(shippingCost),
+          freeShipping: finalShippingCost === 0,
+          coupon: couponId || null,
+          discountAmount: totalDiscount,
+          discountBreakdown: {
+            productDiscount: verifiedProductDiscount,
+            shippingDiscount: verifiedShippingDiscount,
+          },
+          finalPrice: calculatedFinalPrice,
+          isGift,
+          giftNote,
+        });
+
+        const newPayment = new Payment({
+          order: newOrder._id,
+          paymentMethod: paymentMethod,
+          amount: calculatedFinalPrice,
+        });
+
+        newOrder.payment = newPayment._id;
+
+        await newOrder.save({ session });
+        await newPayment.save({ session });
+
+        // The cart goes last. Emptying it is what makes the checkout final from
+        // the customer's side, so it must not outlive a rollback.
+        await Cart.findByIdAndDelete(cartId, { session });
+      });
+    } finally {
+      session.endSession();
     }
-
-    // Now that all validations have passed, update coupon usage
-    if (coupon && couponId) {
-      if (userUsage) {
-        userUsage.timesUsed += 1;
-      } else {
-        coupon.usedBy.push({ userId, timesUsed: 1 });
-      }
-      await coupon.save();
-    }
-
-    // Format cart items costs to 2 decimal places
-    const formattedItems = cart.items.map((item) => ({
-      product: item.product,
-      variant: item.variant._id,
-      quantity: item.quantity,
-      cost: parseFloat(item.cost.toFixed(2)),
-    }));
-
-    const newOrder = new Order({
-      user: userId,
-      items: formattedItems,
-      street,
-      city,
-      state,
-      addressDetails,
-      phone,
-      email,
-      totalPrice: parseFloat(cart.totalPrice.toFixed(2)),
-      shippingRegion: shippingRegion,
-      shippingCost: parseFloat(shippingCost),
-      freeShipping: finalShippingCost === 0,
-      coupon: couponId || null,
-      discountAmount: totalDiscount,
-      discountBreakdown: {
-        productDiscount: verifiedProductDiscount,
-        shippingDiscount: verifiedShippingDiscount,
-      },
-      finalPrice: calculatedFinalPrice,
-      isGift,
-      giftNote,
-    });
-
-    const newPayment = new Payment({
-      order: newOrder._id,
-      paymentMethod: paymentMethod,
-      amount: calculatedFinalPrice,
-    });
-
-    newOrder.payment = newPayment._id;
-
-    await newOrder.save();
-    await newPayment.save();
-
-    // Update cart
-    await Cart.findByIdAndDelete(cartId);
 
     // Email the invoice without blocking the response. Rendering the PDF and
     // handing it to the mail server can take seconds - longer still when SMTP

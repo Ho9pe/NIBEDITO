@@ -22,6 +22,7 @@ const shippingRouter = require("./routers/shippingRouter");
 const paymentRouter = require("./routers/paymentRouter");
 const faqRouter = require("./routers/faqRouter");
 const secret = require("./secret");
+const logger = require("./helper/logger");
 const reviewRouter = require("./routers/reviewRouter");
 
 const app = express();
@@ -74,13 +75,16 @@ app.get("/health", (req, res) => {
     database: DB_STATES[mongoose.connection.readyState] || "unknown",
     uptime: Math.floor(process.uptime()),
     environment: secret.nodeEnv || "(unset)",
-    // Auth cookies are only usable from a separately hosted frontend when
-    // NODE_ENV is "production"; otherwise they go out SameSite=Strict and the
-    // browser silently refuses to send them cross-site, which looks exactly
-    // like being logged out.
+    // Cookies go out SameSite=Lax in both cases; NODE_ENV only decides the
+    // Secure flag. Nginx serves the frontend and the API from one origin, so
+    // the browser treats every API call as same-site and Lax is enough for it
+    // to send them - while still refusing to attach them to a cross-site
+    // request, which is what stops a form on another domain from acting as the
+    // signed-in user. Secure over plain http would mean the cookie is never
+    // stored at all, hence the switch rather than a constant.
     authCookieMode: isProduction
-      ? "SameSite=None; Secure (cross-site OK)"
-      : "SameSite=Strict (cross-site cookies WILL NOT be sent)",
+      ? "SameSite=Lax; Secure"
+      : "SameSite=Lax (no Secure flag; plain http locally)",
   });
 });
 
@@ -96,11 +100,44 @@ app.use((req, res, next) => {
 });
 // Server Error Handling
 app.use((err, req, res, next) => {
+  const statusCode = err.status || err.statusCode || 500;
+
+  // Nothing used to log here, so a 500 in production left no trace anywhere:
+  // no stack, no message, nothing in `docker compose logs api`. Server faults
+  // get the whole error because that is what you need when one wakes you up.
+  // Client errors are ordinary traffic - a wrong password, a stale coupon -
+  // and logging them at the same level would bury the faults, so they stay at
+  // debug.
+  if (statusCode >= 500) {
+    logger.error(`${req.method} ${req.originalUrl} -> ${statusCode}`, err);
+  } else {
+    logger.debug(
+      `${req.method} ${req.originalUrl} -> ${statusCode}: ${err.message}`
+    );
+  }
+
+  // Mongoose schema validation reaching this point means a request body got
+  // past the express-validator rules. The message is written for a person and
+  // is safe to pass on, but the status was 500, which told the client the
+  // request was fine and the server was broken. It is a 400.
+  if (err.name === "ValidationError" && err.errors) {
+    return errorResponse(res, {
+      statusCode: 400,
+      message: Object.values(err.errors)
+        .map((e) => e.message)
+        .join(", "),
+    });
+  }
+
+  // http-errors sets `expose` on the errors whose message was written for the
+  // client, which here means everything raised with createError. Anything else
+  // is an internal fault, and its message is a driver or Mongoose string that
+  // can name collections, fields and connection targets - so it is replaced
+  // rather than forwarded. The real one is in the log line above.
   return errorResponse(res, {
-    statusCode: err.status,
-    message: err.message,
+    statusCode,
+    message: err.expose ? err.message : "Internal Server Error",
   });
-  next();
 });
 
 module.exports = app;

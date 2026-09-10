@@ -236,24 +236,28 @@ at runtime. Setting `NEXT_PUBLIC_API_URL` as a container environment variable
 does nothing. Changing it requires rebuilding the frontend image, and on a
 hosting platform it means a fresh build (clear the build cache), not a restart.
 
-### `NODE_ENV` decides whether login works at all
+### `NODE_ENV` decides whether cookies carry `Secure`
 
-Auth cookies are only sent with `SameSite=None; Secure` when `NODE_ENV` is
-exactly `production`. Otherwise they go out `SameSite=Strict`.
+Auth cookies are `SameSite=Lax` in every environment. `NODE_ENV` controls one
+thing: whether they also carry the `Secure` flag.
 
-- **Locally** you want `development`. Frontend and API are both on `localhost`,
-  which counts as the same site, and `Secure` cookies would be rejected over
-  plain http.
-- **Deployed**, where the frontend and API are on different hosts, `production`
-  is required. Without it the browser silently refuses to send the cookie, login
-  appears to succeed, and every subsequent request arrives unauthenticated —
-  which looks exactly like being logged out at random.
+- **Locally** you want `development`. `Secure` cookies are rejected over plain
+  http, so setting `production` here means the browser stores nothing and you
+  cannot stay signed in.
+- **Deployed**, `production` is required. https demands `Secure`, and without it
+  the cookie travels in the clear.
+
+`Lax` is sufficient because Nginx serves the frontend and the API from one
+origin split by path, so the browser treats every API call as same-site. It is
+also what keeps a form on another domain from making authenticated requests as
+the signed-in user — there is no CSRF token in the app, so the cookie policy is
+the whole defence. Do not switch these to `SameSite=None` without adding one.
 
 `GET /health` reports which mode is active:
 
 ```json
 { "status": "ok", "database": "connected", "environment": "production",
-  "authCookieMode": "SameSite=None; Secure (cross-site OK)" }
+  "authCookieMode": "SameSite=Lax; Secure" }
 ```
 
 ### `morgan` is a runtime dependency in the wrong section

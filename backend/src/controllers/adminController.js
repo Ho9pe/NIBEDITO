@@ -49,7 +49,7 @@ const handleAdminLogin = async (req, res, next) => {
       maxAge: 60 * 60 * 1000,
       httpOnly: true,
       secure: nodeEnv === "production",
-      sameSite: nodeEnv === "production" ? "None" : "strict",
+      sameSite: "lax",
     });
 
     return successResponse(res, {
@@ -70,7 +70,7 @@ const handleAdminLogout = async (req, res, next) => {
     res.clearCookie("accessToken", {
       httpOnly: true,
       secure: nodeEnv === "production",
-      sameSite: nodeEnv === "production" ? "None" : "strict",
+      sameSite: "lax",
     });
 
     return successResponse(res, {
