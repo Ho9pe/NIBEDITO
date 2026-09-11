@@ -240,10 +240,11 @@ Fill in `backend/.env`. The values that must change from the example:
 | `SMTP_EMAIL` | the From address, e.g. `no-reply@nibedito.com` - must be on the verified domain |
 | `SMTP_USER` | the Mailgun SMTP user. Same as `SMTP_EMAIL` in the usual case, and can be omitted then |
 | `SMTP_PASSWORD` | that SMTP user's password - **not** the account API key |
-| `SMTP_HOST` / `SMTP_PORT` | `smtp.mailgun.org` / `587` (`smtp.eu.mailgun.org` on the EU region) |
+| `SMTP_HOST` / `SMTP_PORT` | `smtp.mailgun.org` / **`2525`** - not 587, which DigitalOcean blocks outbound on every droplet (`smtp.eu.mailgun.org` on the EU region) |
 | `STORE_NAME` | display name on outgoing mail as well as on invoices |
 | `CLOUDINARY_*` | Cloudinary credentials |
-| `SUPER_ADMIN_*` | the admin account you will sign in with |
+| `SUPER_ADMIN_EMAIL` / `SUPER_ADMIN_PASSWORD` | the admin account you will sign in with at `/admin-login` |
+| `SUPER_ADMIN_PHONE` | 11 digits beginning with 0, same as a customer phone |
 
 Generate the JWT keys with `openssl rand -base64 48`, once each.
 
@@ -316,7 +317,7 @@ machine first, override the compose defaults that point at the local catcher
 (PowerShell, from the repository root):
 
 ```powershell
-docker compose run --rm -e SMTP_HOST=smtp.mailgun.org -e SMTP_PORT=587 -e SMTP_USER=no-reply@nibedito.com -e SMTP_EMAIL=no-reply@nibedito.com -e STORE_NAME=Nibedito -e SMTP_PASSWORD='YOUR_SMTP_PASSWORD' api node scripts/check-smtp.js you@example.com
+docker compose run --rm -e SMTP_HOST=smtp.mailgun.org -e SMTP_PORT=2525 -e SMTP_USER=no-reply@nibedito.com -e SMTP_EMAIL=no-reply@nibedito.com -e STORE_NAME=Nibedito -e SMTP_PASSWORD='YOUR_SMTP_PASSWORD' api node scripts/check-smtp.js you@example.com
 ```
 
 Then walk one real path end to end: register, receive and click the activation
