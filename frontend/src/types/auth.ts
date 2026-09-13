@@ -18,8 +18,8 @@ export interface RegisterData {
   password: string;
   street: string;
   city: string;
-  state: string;
-  postalCode?: string;
+  district: string;
+  thana?: string;
 }
 
 export interface RegisterResponse {

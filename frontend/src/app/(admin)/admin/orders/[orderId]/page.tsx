@@ -311,10 +311,10 @@ export default function OrderDetailsPage() {
                     </div>
                     <div>
                       <label className="text-sm font-medium text-slate-500 dark:text-slate-400">
-                        State
+                        District
                       </label>
                       <p className="text-slate-900 dark:text-slate-100">
-                        {order.state}
+                        {order.district}
                       </p>
                     </div>
                   </div>

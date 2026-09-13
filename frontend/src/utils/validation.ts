@@ -69,8 +69,8 @@ export const validateRegistrationData = (data: RegisterData): ValidationResult =
     errors.city = 'City is required';
   }
 
-  if (!data.state?.trim()) {
-    errors.state = 'State is required';
+  if (!data.district?.trim()) {
+    errors.district = 'District is required';
   }
 
   return {

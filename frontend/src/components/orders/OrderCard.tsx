@@ -298,7 +298,7 @@ export const OrderCard = ({ order }: { order: Order }) => {
             <div className="space-y-2 text-sm">
               <p className="text-slate-600 dark:text-slate-400">
                 <span className="font-medium">Address:</span> {order.street},{" "}
-                {order.city}, {order.state}
+                {order.city}, {order.district}
               </p>
               {order.addressDetails && (
                 <p className="text-slate-600 dark:text-slate-400">

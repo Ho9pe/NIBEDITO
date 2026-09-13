@@ -43,7 +43,7 @@ export interface Order {
   items: OrderItem[];
   street: string;
   city: string;
-  state: string;
+  district: string;
   addressDetails?: string;
   phone: string;
   email: string;
@@ -80,7 +80,7 @@ export interface CreateOrderRequest {
   cartId: string;
   street: string;
   city: string;
-  state: string;
+  district: string;
   addressDetails?: string;
   phone: string;
   email: string;

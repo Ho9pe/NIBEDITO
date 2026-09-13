@@ -55,8 +55,8 @@ export default function UserProfile({
   const [addressFormData, setAddressFormData] = useState<AddAddressRequest>({
     street: "",
     city: "",
-    state: "",
-    postalCode: "",
+    district: "",
+    thana: "",
     isDefault: false,
   });
   const [status, setStatus] = useState<StatusState>({ type: "", message: "" });
@@ -193,8 +193,8 @@ export default function UserProfile({
       setAddressFormData({
         street: selectedAddress.street,
         city: selectedAddress.city,
-        state: selectedAddress.state,
-        postalCode: selectedAddress.postalCode || "",
+        district: selectedAddress.district,
+        thana: selectedAddress.thana || "",
         isDefault: selectedAddress.isDefault,
       });
       setShowAddressForm(true);
@@ -205,8 +205,8 @@ export default function UserProfile({
     setAddressFormData({
       street: "",
       city: "",
-      state: "",
-      postalCode: "",
+      district: "",
+      thana: "",
       isDefault: false,
     });
     setSelectedAddressId(""); // Clear selected address when adding new
@@ -226,8 +226,8 @@ export default function UserProfile({
           const updateData: UpdateAddressRequest = {
             street: addressFormData.street,
             city: addressFormData.city,
-            state: addressFormData.state,
-            postalCode: addressFormData.postalCode,
+            district: addressFormData.district,
+            thana: addressFormData.thana,
             isDefault: addressFormData.isDefault,
           };
 
@@ -241,8 +241,8 @@ export default function UserProfile({
           const newAddressData: AddAddressRequest = {
             street: addressFormData.street,
             city: addressFormData.city,
-            state: addressFormData.state,
-            postalCode: addressFormData.postalCode || "",
+            district: addressFormData.district,
+            thana: addressFormData.thana || "",
             isDefault: addressFormData.isDefault,
           };
 
@@ -366,7 +366,7 @@ export default function UserProfile({
   };
 
   const formatAddress = (address: Address): string => {
-    const fullAddress = `${address.street}, ${address.city}, ${address.state} ${address.postalCode}`;
+    const fullAddress = `${address.street}, ${address.city}, ${address.district} ${address.thana}`;
     return address.isDefault ? `${fullAddress} (Default)` : fullAddress;
   };
 
@@ -375,7 +375,7 @@ export default function UserProfile({
     const parts = [];
     if (address.street) parts.push(address.street.substring(0, 30));
     if (address.city) parts.push(address.city);
-    if (address.state) parts.push(address.state);
+    if (address.district) parts.push(address.district);
     
     const shortAddress = parts.join(', ');
     const suffix = address.isDefault ? ' (Default)' : '';
@@ -612,28 +612,28 @@ export default function UserProfile({
                     />
                   </div>
                   <div className="space-y-3">
-                    <Label htmlFor="state" className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                      State
+                    <Label htmlFor="district" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                      District
                     </Label>
                     <Input
-                      id="state"
-                      name="state"
-                      value={addressFormData.state}
+                      id="district"
+                      name="district"
+                      value={addressFormData.district}
                       onChange={handleAddressChange}
-                      placeholder="State"
+                      placeholder="District"
                       className="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-700"
                     />
                   </div>
                   <div className="space-y-3">
-                    <Label htmlFor="postalCode" className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                      Postal Code
+                    <Label htmlFor="thana" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                      Thana
                     </Label>
                     <Input
-                      id="postalCode"
-                      name="postalCode"
-                      value={addressFormData.postalCode}
+                      id="thana"
+                      name="thana"
+                      value={addressFormData.thana}
                       onChange={handleAddressChange}
-                      placeholder="Postal Code"
+                      placeholder="Thana"
                       className="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-700"
                     />
                   </div>
