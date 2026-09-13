@@ -88,6 +88,7 @@ module.exports = {
   uploadReview: createReviewUploader(),
   uploadCategory: createUploader("categories"),
   uploadProfile: createUploader("profiles", 5), // 5MB limit for profiles
+  uploadBanner: createUploader("banners", 10), // 10MB limit for banners
   deleteImage: async (publicId) => {
     try {
       const result = await cloudinary.uploader.destroy(publicId);

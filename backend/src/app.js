@@ -23,6 +23,7 @@ const paymentRouter = require("./routers/paymentRouter");
 const faqRouter = require("./routers/faqRouter");
 const secret = require("./secret");
 const reviewRouter = require("./routers/reviewRouter");
+const bannerRouter = require("./routers/bannerRouter");
 
 const app = express();
 app.set("trust proxy", 1);
@@ -60,6 +61,7 @@ app.use("/api/shipping", shippingRouter);
 app.use("/api/payment", paymentRouter);
 app.use("/api/faqs", faqRouter);
 app.use("/api/reviews", reviewRouter);
+app.use("/api/banners", bannerRouter);
 
 // Liveness probe for the platform health check. This stays 200 whenever the
 // process can still serve requests: database state is reported in the body
