@@ -7,7 +7,7 @@ const Admin = require("../models/adminModel");
 const { successResponse } = require("./responseController");
 const { jwtAccessKey, jwtRefreshKey } = require("../secret");
 const { createJSONWebToken } = require("../helper/jsonwebtoken");
-const { clientURL } = require("../secret");
+const { clientURL, websiteURL } = require("../secret");
 const { emailWithNodeMailer } = require("../helper/email");
 const { jwtActivationKey, nodeEnv } = require("../secret");
 const logger = require("../helper/logger");
@@ -138,7 +138,7 @@ const forgotPassword = async (req, res, next) => {
     }
 
     const token = createJSONWebToken({ id: user._id }, jwtActivationKey, "10m");
-    const resetURL = `${clientURL}/reset-password?token=${token}`;
+    const resetURL = `${websiteURL}/reset-password?token=${token}`;
     logger.debug("Reset URL:", resetURL);
     if (isEmail) {
       const emailData = {
@@ -338,7 +338,7 @@ const processRegister = async (req, res, next) => {
                 <h1>Welcome to our website</h1>
                 <p>
                     Please click on the link below to activate your account.<br>
-                    <a target="_blank" href="${clientURL}/activate-account?token=${token}">
+                    <a target="_blank" href="${websiteURL}/activate-account?token=${token}">
                         Activate Account
                     </a>
                 </p>
@@ -475,7 +475,7 @@ const resendVerification = async (req, res, next) => {
                 <h1>Welcome to our website</h1>
                 <p>
                     Please click on the link below to activate your account.<br>
-                    <a target="_blank" href="${clientURL}/activate-account?token=${token}">
+                    <a target="_blank" href="${websiteURL}/activate-account?token=${token}">
                         Activate Account
                     </a>
                 </p>
