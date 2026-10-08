@@ -6,7 +6,88 @@ import Link from "next/link";
 import { bannerService } from "@/services/bannerService";
 import type { Banner } from "@/types";
 import { DUMMY_IMAGES } from "@/constants/dummyData";
-import { FiChevronLeft, FiChevronRight, FiArrowRight } from "react-icons/fi";
+import { FiChevronLeft, FiChevronRight, FiArrowRight, FiShield, FiX, FiRefreshCw } from "react-icons/fi";
+
+/* ── Satisfaction Guarantee Modal ─────────────────────────────────────── */
+function GuaranteeModal({ onClose }: { onClose: () => void }) {
+  // Close on Escape key
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="guarantee-title"
+    >
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        onClick={onClose}
+      />
+
+      {/* Card */}
+      <div className="relative w-full max-w-sm bg-white dark:bg-slate-800 rounded-2xl shadow-2xl overflow-hidden animate-modal-slide-up">
+        {/* Rose top accent bar */}
+        <div className="h-1.5 w-full bg-gradient-to-r from-rose-500 to-rose-700" />
+
+        {/* Close button */}
+        <button
+          onClick={onClose}
+          aria-label="Close guarantee info"
+          className="absolute top-4 right-4 w-7 h-7 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-500 dark:text-gray-400 hover:bg-rose-100 dark:hover:bg-rose-900/40 hover:text-rose-600 transition-colors duration-200"
+        >
+          <FiX className="w-4 h-4" />
+        </button>
+
+        <div className="p-6">
+          {/* Header */}
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-11 h-11 rounded-full bg-gradient-to-br from-rose-500 to-rose-700 flex items-center justify-center shadow-md shadow-rose-500/30">
+              <FiShield className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h2 id="guarantee-title" className="text-base font-bold text-slate-900 dark:text-gray-100">
+                100% Satisfaction Guaranteed
+              </h2>
+              <p className="text-xs text-rose-600 dark:text-rose-400 font-medium">We stand behind every order</p>
+            </div>
+          </div>
+
+          {/* Body */}
+          <div className="space-y-3 text-sm text-slate-600 dark:text-gray-300 leading-relaxed">
+            <p>
+              At <span className="font-semibold text-rose-600">Nibedito</span>, your satisfaction with our authentic products is guaranteed. If you are not satisfied, please return the product to the delivery person immediately.
+            </p>
+            <div className="flex items-start gap-2 bg-rose-50 dark:bg-rose-900/20 rounded-xl p-3 border border-rose-100 dark:border-rose-800/40">
+              <FiRefreshCw className="w-4 h-4 text-rose-600 flex-shrink-0 mt-0.5" />
+              <p>
+                <span className="font-semibold text-slate-800 dark:text-gray-200">No return charge.</span> You will receive a full refund (if paid) or exchange within <span className="font-semibold">5 working days</span>.
+              </p>
+            </div>
+          </div>
+
+          {/* Learn More CTA */}
+          <Link
+            href="/return-policy"
+            onClick={onClose}
+            className="mt-5 flex items-center justify-between w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 hover:border-rose-500 dark:hover:border-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-all duration-200 group"
+          >
+            <div>
+              <p className="text-[10px] text-slate-400 dark:text-gray-500 uppercase tracking-widest font-medium">Before placing an order</p>
+              <p className="text-sm font-semibold text-slate-800 dark:text-gray-100 group-hover:text-rose-600 dark:group-hover:text-rose-400 transition-colors">Learn More</p>
+            </div>
+            <FiArrowRight className="w-4 h-4 text-slate-400 group-hover:text-rose-600 group-hover:translate-x-1 transition-all duration-200" />
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 interface HeroSectionProps {
   user?: any;
@@ -20,6 +101,7 @@ export default function HeroSection({ user }: HeroSectionProps) {
   const [isPaused, setIsPaused] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
   const [textKey, setTextKey] = useState(0); // bump to re-trigger CSS fade-in
+  const [guaranteeOpen, setGuaranteeOpen] = useState(false);
   const touchStart = useRef<number | null>(null);
 
   /* Fetch active banners on mount */
@@ -163,6 +245,16 @@ export default function HeroSection({ user }: HeroSectionProps) {
                 </Link>
               </div>
 
+              {/* ── "What if you're not happy?" trigger ── */}
+              <button
+                onClick={() => setGuaranteeOpen(true)}
+                className="inline-flex items-center gap-1.5 text-sm text-slate-500 dark:text-gray-400 hover:text-rose-600 dark:hover:text-rose-400 transition-colors duration-200 group mt-1"
+              >
+                <FiShield className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+                <span className="underline underline-offset-2 decoration-dotted">
+                  What if you&apos;re not happy?
+                </span>
+              </button>
 
             </div>
           ) : (
@@ -201,6 +293,18 @@ export default function HeroSection({ user }: HeroSectionProps) {
                   <span className="relative">Browse Categories</span>
                 </Link>
               </div>
+
+              {/* ── "What if you're not happy?" trigger ── */}
+              <button
+                onClick={() => setGuaranteeOpen(true)}
+                className="inline-flex items-center gap-1.5 text-sm text-slate-500 dark:text-gray-400 hover:text-rose-600 dark:hover:text-rose-400 transition-colors duration-200 group mt-1"
+              >
+                <FiShield className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+                <span className="underline underline-offset-2 decoration-dotted">
+                  What if you&apos;re not happy?
+                </span>
+              </button>
+
             </div>
           )}
         </div>
@@ -312,6 +416,10 @@ export default function HeroSection({ user }: HeroSectionProps) {
           </div>
         </div>
       </div>
+
+      {/* ── Guarantee Modal ── */}
+      {guaranteeOpen && <GuaranteeModal onClose={() => setGuaranteeOpen(false)} />}
+
     </section>
   );
 }
