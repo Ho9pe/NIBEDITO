@@ -49,8 +49,8 @@ export const authService: AuthService = {
             address: {
                 street: userData.street,
                 city: userData.city,
-                state: userData.state,
-                postalCode: userData.postalCode
+                district: userData.district,
+                thana: userData.thana
             }
         });
 

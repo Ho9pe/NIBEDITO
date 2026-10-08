@@ -19,6 +19,10 @@ const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
 const smtpPort = Number(process.env.SMTP_PORT) || 587;
 const smtpPassword = process.env.SMTP_PASSWORD;
 const clientURL = process.env.CLIENT_URL;
+// Public-facing domain used in email links (activation, reset-password, etc.).
+// In dev: falls back to CLIENT_URL (localhost). In production: WEBSITE_URL must be set explicitly.
+const websiteURL = process.env.WEBSITE_URL
+  || (process.env.NODE_ENV === 'production' ? null : process.env.CLIENT_URL);
 
 // Printed on invoice PDFs. Defaulted rather than required: an unconfigured
 // deployment should still produce a usable invoice, not fail to generate one.
@@ -52,6 +56,7 @@ module.exports = {
     smtpPort,
     smtpPassword,
     clientURL,
+    websiteURL,
     storeName,
     storeAddress,
     storeEmail,

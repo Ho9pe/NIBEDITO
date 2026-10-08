@@ -19,7 +19,7 @@ import type { ShippingRate, PreviewCouponRequest } from "@/types";
 interface FormData {
   street: string;
   city: string;
-  state: string;
+  district: string;
   addressDetails: string;
   phone: string;
   email: string;
@@ -51,7 +51,7 @@ export default function CheckoutPage() {
   const [formData, setFormData] = useState<FormData>({
     street: "",
     city: "",
-    state: "",
+    district: "",
     addressDetails: "",
     phone: "",
     email: "",
@@ -78,7 +78,7 @@ export default function CheckoutPage() {
     setFormData({
       street: defaultAddress?.street || "",
       city: defaultAddress?.city || "",
-      state: defaultAddress?.state || "",
+      district: defaultAddress?.district || "",
       addressDetails: "",
       phone: user.phone || "",
       email: user.email || "",

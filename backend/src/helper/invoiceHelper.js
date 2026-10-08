@@ -123,7 +123,7 @@ const buildInvoiceData = async (orderId) => {
       name: order.user?.name || "Customer",
       email: order.email,
       phone: order.phone,
-      address: [order.street, order.city, order.state]
+      address: [order.street, order.city, order.district]
         .filter(Boolean)
         .join(", "),
       addressDetails: order.addressDetails || "",

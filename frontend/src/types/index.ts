@@ -12,5 +12,6 @@ export * from './cart';
 export * from './wishlist';
 export * from './payment';
 export * from './review';
+export * from './banner';
 // Export admin types last to avoid any conflicts
 export * from './admin';

@@ -54,9 +54,13 @@ const uploadImage = async (file, type, identifier) => {
         folder = "nibedito/products/variants";
         publicId = `variants-${identifier}`;
         break;
-      case "review": // Add this case
+      case "review":
         folder = "nibedito/reviews";
         publicId = `reviews-${identifier}`;
+        break;
+      case "banner":
+        folder = "nibedito/banners";
+        publicId = `banners-${identifier}`;
         break;
       default:
         throw new Error("Invalid image type");
