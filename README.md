@@ -163,13 +163,16 @@ returns 500 if the activation email cannot be sent.
 | `JWT_ACCESS_KEY` | Signs access tokens (15 minute lifetime) |
 | `JWT_REFRESH_KEY` | Signs refresh tokens (7 day lifetime) |
 | `JWT_ACTIVATION_KEY` | Signs account-activation and password-reset links |
-| `SMTP_EMAIL` / `SMTP_PASSWORD` | Mail account credentials |
-| `SMTP_HOST` / `SMTP_PORT` | Optional. Defaults to `smtp.gmail.com` and `587`. Compose points these at the local mail catcher |
-| `STORE_NAME` / `STORE_ADDRESS` / `STORE_EMAIL` / `STORE_PHONE` | Optional. Printed in the header of invoice PDFs. Default to `Nibedito`, `Dhaka, Bangladesh`, `SMTP_EMAIL` and blank |
+| `SMTP_EMAIL` | The From address. Providers that verify domains — Mailgun among them — refuse anything not on a domain you own |
+| `SMTP_USER` | Optional. The relay login when it differs from the From address. Falls back to `SMTP_EMAIL`, which is the usual case on Mailgun |
+| `SMTP_PASSWORD` | Relay password. On Mailgun this is the SMTP user's password, not the account API key |
+| `SMTP_HOST` / `SMTP_PORT` | Optional. Defaults to `smtp.gmail.com` and `587`. Mailgun is `smtp.mailgun.org`. Compose points these at the local mail catcher |
+| `STORE_NAME` | Optional, defaults to `Nibedito`. Display name on outgoing mail, and the header on invoice PDFs |
+| `STORE_ADDRESS` / `STORE_EMAIL` / `STORE_PHONE` | Optional. Printed on invoice PDFs. Default to `Dhaka, Bangladesh`, `SMTP_EMAIL` and blank |
 | `CLOUDINARY_CLOUD_NAME` / `CLOUDINARY_API_KEY` / `CLOUDINARY_API_SECRET` | Product and profile image uploads |
 | `DEFAULT_USER_PICTURE` | Fallback avatar URL |
 | `DEFAULT_USER_PASSWORD` | Password for the seeded customer accounts, used by `seed-dev.js` and `seedTestUsers.js`. Must satisfy the password rule below — 8+ characters with an uppercase letter, a lowercase letter and a number — or those accounts are skipped |
-| `SUPER_ADMIN_EMAIL` / `SUPER_ADMIN_PASSWORD` / `SUPER_ADMIN_PHONE` | Credentials for the admin account created by `seed-dev.js` and `createDefaultAdmin.js`. Phone is 10 digits here, not 11 |
+| `SUPER_ADMIN_EMAIL` / `SUPER_ADMIN_PASSWORD` / `SUPER_ADMIN_PHONE` | Credentials for the admin account created by `seed-dev.js` and `createDefaultAdmin.js`. Phone is 11 digits, same as a customer |
 
 ## `frontend/.env.local`
 
@@ -236,24 +239,28 @@ at runtime. Setting `NEXT_PUBLIC_API_URL` as a container environment variable
 does nothing. Changing it requires rebuilding the frontend image, and on a
 hosting platform it means a fresh build (clear the build cache), not a restart.
 
-### `NODE_ENV` decides whether login works at all
+### `NODE_ENV` decides whether cookies carry `Secure`
 
-Auth cookies are only sent with `SameSite=None; Secure` when `NODE_ENV` is
-exactly `production`. Otherwise they go out `SameSite=Strict`.
+Auth cookies are `SameSite=Lax` in every environment. `NODE_ENV` controls one
+thing: whether they also carry the `Secure` flag.
 
-- **Locally** you want `development`. Frontend and API are both on `localhost`,
-  which counts as the same site, and `Secure` cookies would be rejected over
-  plain http.
-- **Deployed**, where the frontend and API are on different hosts, `production`
-  is required. Without it the browser silently refuses to send the cookie, login
-  appears to succeed, and every subsequent request arrives unauthenticated —
-  which looks exactly like being logged out at random.
+- **Locally** you want `development`. `Secure` cookies are rejected over plain
+  http, so setting `production` here means the browser stores nothing and you
+  cannot stay signed in.
+- **Deployed**, `production` is required. https demands `Secure`, and without it
+  the cookie travels in the clear.
+
+`Lax` is sufficient because Nginx serves the frontend and the API from one
+origin split by path, so the browser treats every API call as same-site. It is
+also what keeps a form on another domain from making authenticated requests as
+the signed-in user — there is no CSRF token in the app, so the cookie policy is
+the whole defence. Do not switch these to `SameSite=None` without adding one.
 
 `GET /health` reports which mode is active:
 
 ```json
 { "status": "ok", "database": "connected", "environment": "production",
-  "authCookieMode": "SameSite=None; Secure (cross-site OK)" }
+  "authCookieMode": "SameSite=Lax; Secure" }
 ```
 
 ### `morgan` is a runtime dependency in the wrong section
@@ -262,28 +269,37 @@ exactly `production`. Otherwise they go out `SameSite=Strict`.
 production-only install produces a server that crashes with `MODULE_NOT_FOUND`.
 Install with dev dependencies included until it is moved.
 
-### Free hosting tiers often block outbound SMTP
+### Hosts block outbound SMTP — use port 2525
 
-Render's free web services stopped allowing outbound traffic to ports 25, 465
-and 587 in September 2025, and port 25 is blocked on every plan. Nothing in the
-application reports this usefully on its own: the connection to the mail server
-simply times out, registration fails at the point it tries to send the
-activation email, and the account is rolled back.
+This is not a free-tier quirk; it is the default almost everywhere.
+**DigitalOcean blocks outbound 25, 465 and 587 on every droplet**, reserved IPs
+included. Render's free web services block the same three, and port 25 on every
+plan. It is an anti-spam measure aimed at the IP range, not at your account, and
+no amount of correct credentials gets around it.
 
-Check it with:
+Nothing reports it usefully. The connection simply times out, registration fails
+at the point it tries to send the activation email, and the account is rolled
+back — so a new customer sees an error and has no account to retry with.
+
+**Use port 2525.** Mailgun accepts 25, 465, 587 and 2525; the last is not on
+anyone's block list and carries the same STARTTLS traffic as 587. That single
+change is what made mail work on this deployment.
+
+Check which side is at fault:
 
 ```bash
-docker compose run --rm \
-  -e SMTP_HOST=smtp.gmail.com -e SMTP_PORT=587 \
-  api node scripts/check-smtp.js
+docker compose run --rm -e SMTP_HOST=smtp.mailgun.org -e SMTP_PORT=2525 api node scripts/check-smtp.js you@example.com
 ```
 
-`ETIMEDOUT` from a deployment while the same command succeeds from a laptop
-means the host is blocking the port, not that the credentials are wrong.
+`ETIMEDOUT` from a deployment while the same credentials succeed from a laptop
+means the host is blocking the port, not that the credentials are wrong. The
+script prints which stage failed, so a timeout at connect and a rejection at
+authentication are told apart rather than both reading as "email is broken".
 
-Two ways out: pay for an instance type that permits SMTP, or send through a
-provider's HTTPS API — Resend, SendGrid, Mailgun, Postmark — which uses port 443
-and is unaffected.
+If 2525 is blocked too, send through the provider's HTTPS API instead — Mailgun,
+Resend, SendGrid and Postmark all have one, all on port 443, which nothing
+blocks. That means replacing nodemailer in `helper/email.js`, and it is the only
+option immune to a host changing its mind.
 
 ### Field rules live in one file
 
@@ -305,8 +321,13 @@ Current rules:
 | Name | 3–30 characters |
 | Phone | exactly 11 digits, stored beginning with 0 |
 
-Admin accounts keep their own stricter password rule and a 10-digit phone in
-`adminModel.js`; that is a separate collection and is not covered by these.
+Admin accounts are a separate collection with their own password rule in
+`adminModel.js` — stricter, and a fourth copy of a rule that belongs here. The
+phone rule is no longer among them: `adminModel` imports `PHONE_PATTERN` from
+this file, the same as `userModel`. It used to carry its own 10-digit copy,
+which made a Bangladeshi number written the normal way valid for a customer and
+invalid for an admin, and shipped a `SUPER_ADMIN_PHONE` in `.env.example` that
+could not pass. The password rule is the one still to fold in.
 
 ---
 
@@ -318,12 +339,14 @@ site takes real customers.
 
 ## Blocking
 
-- [ ] **Email cannot be sent from the current host.** Render's free tier blocks
-      outbound SMTP, so registration and password reset fail, and invoice emails
-      never leave the server — the invoice is still downloadable from the orders
-      page, which is why that send is not allowed to fail an order. Either move
-      to a paid instance or switch `helper/email.js` to a provider's HTTPS API.
-      See the SMTP note under Gotchas.
+- [x] **Email sends from the droplet.** DigitalOcean blocks outbound 25, 465 and
+      587, which made registration and password reset fail — the account is
+      rolled back when the activation email cannot be sent, so a new customer
+      got an error and nothing to retry with. Mailgun on port **2525** goes
+      through. Invoice sends were never allowed to fail an order, and the
+      invoice stays downloadable from the orders page regardless. Moving
+      `helper/email.js` to Mailgun's HTTPS API would make this immune to a host
+      changing its mind; port 2525 is a workaround, not a guarantee.
 - [ ] **Rotate the database password.** The old one appeared in startup logs
       before those were redacted, so treat it as public.
 - [ ] **No automated tests anywhere.** `npm test` is still the placeholder that
@@ -333,11 +356,6 @@ site takes real customers.
 
 ## Half-built features
 
-- [ ] **Wishlist.** `User.wishlist` exists and `POST /products/:slug/wishlist`
-      adds to it, but there is no endpoint to list or remove, and no
-      `/wishlist` page. The nav entries are deliberately left in place - in the
-      account sidebar, the profile dropdown, quick actions and the empty cart -
-      and currently 404.
 - [ ] **Phone verification.** `verificationStatus.phone` is stored and shown but
       nothing ever sets it. The UI says "coming soon".
 - [ ] **Support widget is not a chatbot.** Typing a message opens WhatsApp; no

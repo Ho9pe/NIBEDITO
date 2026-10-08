@@ -10,10 +10,20 @@ RUN npm ci --include=dev --no-audit --no-fund
 COPY . .
 
 # NEXT_PUBLIC_* values are inlined into the client bundle at build time, not
-# read at runtime. This has to be a build arg: setting it as a container
-# environment variable later has no effect, and changing it means rebuilding.
+# read at runtime. These have to be build args: setting them as container
+# environment variables later has no effect, and changing one means rebuilding.
+# All three are needed. Any one left unset is inlined as undefined and fails
+# quietly - the support widget renders a dead link, Cloudinary URLs come out
+# malformed - with nothing in the build log to say so.
 ARG NEXT_PUBLIC_API_URL=http://localhost:3001/api
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+
+ARG NEXT_PUBLIC_CLOUDINARY_URL
+ENV NEXT_PUBLIC_CLOUDINARY_URL=$NEXT_PUBLIC_CLOUDINARY_URL
+
+ARG NEXT_PUBLIC_WHATSAPP_PHONE_NUMBER
+ENV NEXT_PUBLIC_WHATSAPP_PHONE_NUMBER=$NEXT_PUBLIC_WHATSAPP_PHONE_NUMBER
+
 RUN npm run build
 
 

@@ -13,6 +13,7 @@ COPY . .
 EXPOSE 3001
 
 # secret.js loads ../.env relative to src/, i.e. /app/.env. That file is
-# excluded from the image on purpose; compose mounts it in read-only, and real
-# environment variables take precedence over it either way.
+# excluded from the image on purpose: both compose stacks hand it in with
+# env_file, and real environment variables take precedence over anything dotenv
+# would read off disk either way.
 CMD ["node", "src/server.js"]
