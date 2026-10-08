@@ -25,8 +25,8 @@ export default function RegisterForm() {
     password: "",
     street: "",
     city: "",
-    state: "",
-    postalCode: "",
+    district: "",
+    thana: "",
   });
 
   // typed errors
@@ -85,7 +85,7 @@ export default function RegisterForm() {
       } else if (error.message.toLowerCase().includes("phone")) {
         setErrors((prev) => ({ ...prev, phone: error.message }));
       } else if (error.message.toLowerCase().includes("address")) {
-        const addressFields = ["street", "city", "state", "postalCode"];
+        const addressFields = ["street", "city", "district", "thana"];
         addressFields.forEach((field) => {
           if (error.message.toLowerCase().includes(field)) {
             setErrors((prev) => ({ ...prev, [field]: error.message }));
@@ -285,23 +285,23 @@ export default function RegisterForm() {
 
               <div>
                 <label
-                  htmlFor="postalCode"
+                  htmlFor="thana"
                   className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2"
                 >
-                  Postal Code
+                  Thana
                 </label>
                 <input
                   type="text"
-                  id="postalCode"
-                  name="postalCode"
+                  id="thana"
+                  name="thana"
                   placeholder="Optional"
-                  value={formData.postalCode}
+                  value={formData.thana}
                   onChange={handleChange}
-                  className={inputClassName("postalCode")}
+                  className={inputClassName("thana")}
                 />
-                {errors.postalCode && (
+                {errors.thana && (
                   <p className="mt-2 text-sm text-red-600 dark:text-red-400">
-                    {errors.postalCode}
+                    {errors.thana}
                   </p>
                 )}
               </div>
@@ -333,23 +333,23 @@ export default function RegisterForm() {
 
               <div>
                 <label
-                  htmlFor="state"
+                  htmlFor="district"
                   className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2"
                 >
-                  State
+                  District
                 </label>
                 <input
                   type="text"
-                  id="state"
-                  name="state"
-                  value={formData.state}
+                  id="district"
+                  name="district"
+                  value={formData.district}
                   onChange={handleChange}
-                  className={inputClassName("state")}
-                  placeholder="Enter your state"
+                  className={inputClassName("district")}
+                  placeholder="Enter your district"
                 />
-                {errors.state && (
+                {errors.district && (
                   <p className="mt-2 text-sm text-red-600 dark:text-red-400">
-                    {errors.state}
+                    {errors.district}
                   </p>
                 )}
               </div>

@@ -19,22 +19,22 @@ const users = [
             {
                 street: 'Test Street 1',
                 city: 'Test City',
-                state: 'Test State',
-                postalCode: '12345',
+                district: 'Test State',
+                thana: 'Test Thana',
                 isDefault: true
             },
             {
                 street: 'Test Street 1B',
                 city: 'Another City',
-                state: 'Another State',
-                postalCode: '54321',
+                district: 'Another State',
+                thana: 'Another Thana',
                 isDefault: false
             },
             {
                 street: 'Test Street 1C',
                 city: 'Third City',
-                state: 'Third State',
-                postalCode: '98765',
+                district: 'Third State',
+                thana: 'Third Thana',
                 isDefault: false
             }
         ],
@@ -52,15 +52,15 @@ const users = [
             {
                 street: 'Test Street 2',
                 city: 'Test City',
-                state: 'Test State',
-                postalCode: '12345',
+                district: 'Test State',
+                thana: 'Test Thana',
                 isDefault: true
             },
             {
                 street: 'Test Street 2B',
                 city: 'Second City',
-                state: 'Second State',
-                postalCode: '67890',
+                district: 'Second State',
+                thana: 'Second Thana',
                 isDefault: false
             }
         ],
@@ -78,22 +78,22 @@ const users = [
             {
                 street: 'Test Street 3',
                 city: 'Test City',
-                state: 'Test State',
-                postalCode: '12345',
+                district: 'Test State',
+                thana: 'Test Thana',
                 isDefault: true
             },
             {
                 street: 'Test Street 3B',
                 city: 'Ban City',
-                state: 'Ban State',
-                postalCode: '11111',
+                district: 'Ban State',
+                thana: 'Ban Thana',
                 isDefault: false
             },
             {
                 street: 'Test Street 3C',
                 city: 'Block City',
-                state: 'Block State',
-                postalCode: '22222',
+                district: 'Block State',
+                thana: 'Block Thana',
                 isDefault: false
             }
         ],
