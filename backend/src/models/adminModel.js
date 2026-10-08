@@ -1,6 +1,8 @@
 const { Schema, model } = require("mongoose");
 const bcrypt = require("bcryptjs");
 
+const { PHONE_PATTERN } = require("../constants/validationRules");
+
 const adminSchema = new Schema(
   {
     name: {
@@ -33,7 +35,14 @@ const adminSchema = new Schema(
       trim: true,
       validate: {
         validator: function (v) {
-          return /^\d{10}$/.test(v);
+          // The shared 11-digit rule, the same one userModel uses. This was its
+          // own hardcoded 10-digit regex for no reason anybody could name, so a
+          // Bangladeshi number written the normal way - 01408805959 - was valid
+          // for a customer and rejected for an admin, and .env.example shipped a
+          // SUPER_ADMIN_PHONE that could never pass. Field rules live in
+          // constants/validationRules.js exactly so a second copy cannot drift
+          // away like this one had.
+          return PHONE_PATTERN.test(v);
         },
         message: (props) => `${props.value} is not a valid phone number!`,
       },
