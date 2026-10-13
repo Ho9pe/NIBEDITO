@@ -1,0 +1,74 @@
+# Checks that run on every pull request, so a broken build is caught on the PR
+# and not after the merge to main. deploy.yml only runs on main; nothing before
+# this file compiled the frontend until that point.
+#
+# For these to block a merge, add "Frontend (lint + build)" and
+# "Backend (install + syntax)" as required status checks in the branch ruleset.
+
+name: CI
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop]
+
+# A new push to the same PR cancels the run still going for the old one.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    name: Frontend (lint + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # Same flags as frontend/Dockerfile: the build needs the dev dependencies.
+      - run: npm ci --include=dev --no-audit --no-fund
+
+      # `next build` also lints and type-checks, and its lint errors are what
+      # failed the deploy of PR #10. Linting first gives the quicker, clearer log.
+      - run: npm run lint
+
+      - name: Build
+        run: npm run build
+        env:
+          # Values are inlined into the bundle at build time. Placeholders are
+          # enough here: this build is only to prove the code compiles.
+          NEXT_PUBLIC_API_URL: http://localhost:5000/api
+
+  backend:
+    name: Backend (install + syntax)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - run: npm ci --no-audit --no-fund
+
+      # The backend has no test suite yet (`npm test` just exits 1). Until it
+      # does, parsing every source file catches syntax errors and a bad merge.
+      - name: Syntax check
+        run: find src -name '*.js' -print0 | xargs -0 -n1 node --check
