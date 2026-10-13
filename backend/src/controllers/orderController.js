@@ -26,7 +26,7 @@ const createOrder = async (req, res, next) => {
       cartId,
       street,
       city,
-      state,
+      district,
       addressDetails = "",
       phone,
       email,
@@ -313,7 +313,7 @@ const createOrder = async (req, res, next) => {
           items: formattedItems,
           street,
           city,
-          state,
+          district,
           addressDetails,
           phone,
           email,
@@ -350,19 +350,6 @@ const createOrder = async (req, res, next) => {
     } finally {
       session.endSession();
     }
-
-    // Email the invoice without blocking the response. Rendering the PDF and
-    // handing it to the mail server can take seconds - longer still when SMTP
-    // is unreachable and the send has to time out - and none of that should
-    // sit between a paying customer and their order confirmation. The promise
-    // carries its own catch, so a failure logs rather than surfacing as an
-    // unhandled rejection, and the same invoice stays downloadable either way.
-    sendInvoiceEmail(newOrder._id).catch((error) =>
-      logger.error(
-        `Unexpected failure dispatching invoice email for order ${newOrder._id}:`,
-        error.message
-      )
-    );
 
     // Email the invoice without blocking the response. Rendering the PDF and
     // handing it to the mail server can take seconds - longer still when SMTP
@@ -558,7 +545,7 @@ const getOrderById = async (req, res, next) => {
       items: [...order.items],
       street: order.street,
       city: order.city,
-      state: order.state,
+      district: order.district,
       addressDetails: order.addressDetails, // Include additional address details
       phone: order.phone,
       email: order.email,
@@ -746,7 +733,7 @@ const getUserOrders = async (req, res, next) => {
 
     const orders = await Order.find({ user: userId })
       .select(
-        "user items street city state phone email totalPrice isPaid createdAt dateOrdered status shippingRegion shippingCost freeShipping coupon discountAmount discountBreakdown finalPrice payment isGift giftNote"
+        "user items street city district phone email totalPrice isPaid createdAt dateOrdered status shippingRegion shippingCost freeShipping coupon discountAmount discountBreakdown finalPrice payment isGift giftNote"
       ) // Added isGift and giftNote
       .populate("user", "name email") // Include user details
       .populate("items.product", "name price thumbnailImage") // Include product details with thumbnailImage

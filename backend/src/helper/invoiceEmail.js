@@ -9,7 +9,7 @@
 const { buildInvoiceData, buildInvoiceFilename } = require("./invoiceHelper");
 const { generateInvoicePdf, formatMoney } = require("./invoicePdf");
 const { emailWithNodeMailer } = require("./email");
-const { clientURL } = require("../secret");
+const { clientURL, websiteURL } = require("../secret");
 const logger = require("./logger");
 
 const escapeHtml = (value) =>
@@ -98,7 +98,7 @@ const buildInvoiceEmailHtml = (invoice) => {
 
     <p style="font-size:14px;">
       You can download this invoice again at any time from
-      <a href="${clientURL}/my-orders" style="color:#e11d48;">your orders page</a>.
+      <a href="${websiteURL}/my-orders" style="color:#e11d48;">your orders page</a>.
     </p>
 
     <p style="font-size:12px;color:#94a3b8;">

@@ -53,9 +53,9 @@ const orderSchema = new Schema(
       trim: true,
     },
 
-    state: {
+    district: {
       type: String,
-      required: [true, "State is required"],
+      required: [true, "District is required"],
       trim: true,
     },
 

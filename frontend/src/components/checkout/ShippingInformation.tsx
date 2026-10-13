@@ -8,7 +8,7 @@ import { FiMapPin, FiPhone, FiMail } from "react-icons/fi";
 interface FormData {
   street: string;
   city: string;
-  state: string;
+  district: string;
   addressDetails: string;
   phone: string;
   email: string;
@@ -88,17 +88,17 @@ export default function ShippingInformation({
 
         <div className="space-y-2">
           <Label
-            htmlFor="state"
+            htmlFor="district"
             className="text-slate-700 dark:text-slate-300 font-medium"
           >
-            State *
+            District *
           </Label>
           <Input
-            id="state"
-            name="state"
-            value={formData.state}
+            id="district"
+            name="district"
+            value={formData.district}
             onChange={handleInputChange}
-            placeholder="Enter your state"
+            placeholder="Enter your district"
             required
             className="bg-slate-50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-700"
           />

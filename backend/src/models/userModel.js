@@ -25,12 +25,12 @@ const addressSchema = new Schema(
       required: [true, "City is required"],
       trim: true,
     },
-    state: {
+    district: {
       type: String,
-      required: [true, "State is required"],
+      required: [true, "District is required"],
       trim: true,
     },
-    postalCode: {
+    thana: {
       type: String,
       trim: true,
     },

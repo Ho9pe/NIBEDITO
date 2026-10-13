@@ -5,7 +5,7 @@ const User = require('../models/userModel');
 const { successResponse } = require('./responseController');
 const { findWithID } = require('../services/findItem');
 const { createJSONWebToken } = require('../helper/jsonwebtoken');
-const { jwtActivationKey, clientURL } = require('../secret');
+const { jwtActivationKey, clientURL, websiteURL } = require('../secret');
 const { emailWithNodeMailer } = require('../helper/email');
 const { deleteImage, uploadImage, getPublicIdFromUrl } = require('../helper/cloudinaryHelper');
 const logger = require("../helper/logger");
@@ -75,7 +75,7 @@ const updateUserInfo = async (req, res, next) => {
                 html: `
                     <h2>Hello ${user.name}</h2>
                     <p>Please click here to verify your new email address: 
-                    <a href="${clientURL}/verify-email?token=${token}">Verify Email</a>
+                    <a href="${websiteURL}/verify-email?token=${token}">Verify Email</a>
                     </p>
                 `
             };
