@@ -85,7 +85,7 @@ export default function BannerList({
           No banners yet
         </h3>
         <p className="text-slate-500 dark:text-slate-400 text-sm max-w-xs">
-          Click "Add Banner" to create your first promotional banner.
+          Click &quot;Add Banner&quot; to create your first promotional banner.
         </p>
       </div>
     );
